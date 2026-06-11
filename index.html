@@ -71,6 +71,18 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .panel-params summary::before{content:'▸';transition:transform .2s;color:var(--verde)}
 .panel-params[open] summary::before{transform:rotate(90deg)}
 .panel-params .selector-graficos{margin:0 0 14px}
+.modal-bg{position:fixed;inset:0;background:rgba(20,30,25,.45);display:flex;align-items:center;justify-content:center;z-index:150;padding:16px}
+.modal{background:var(--carta);border-radius:14px;max-width:560px;width:100%;max-height:86vh;overflow:auto;padding:18px 18px 20px;box-shadow:0 16px 50px rgba(0,0,0,.25)}
+.modal .dt-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px}
+.modal .dt-head h3{margin:0}
+.modal .dt-cerrar{background:#EDEBE2;border:none;border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--tinta);flex:none}
+.modal .dt-fecha{font-size:13px;color:var(--tinta2);margin-bottom:8px}
+.dt-sub{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta2);margin:16px 0 6px}
+.dt-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.dt-item{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--linea);padding:6px 0;font-size:14px}
+.dt-item b{font-family:var(--mono);font-weight:700}
+.dt-item i{color:var(--tinta2);font-style:normal;font-weight:400;font-size:12px}
+@media (max-width:520px){ .dt-grid{grid-template-columns:1fr} }
 #cargando{position:fixed;inset:0;background:var(--fondo);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:200}
 .girador{width:38px;height:38px;border:4px solid var(--linea);border-top-color:var(--verde);border-radius:50%;animation:gira 0.9s linear infinite}
 @keyframes gira{to{transform:rotate(360deg)}}
@@ -862,6 +874,12 @@ function pintarTablero(){
     const base = {
       responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index', intersect:false},
+      onClick:(evt,els,chart)=>{
+        let idx = (els&&els.length)?els[0].index:null;
+        if(idx==null){ const p=chart.getElementsAtEventForMode(evt,'index',{intersect:false},true); if(p.length) idx=p[0].index; }
+        if(idx!=null && tss[idx]) mostrarDetalleToma(prId, tss[idx]);
+      },
+      onHover:(evt,els,chart)=>{ chart.canvas.style.cursor = els&&els.length ? 'pointer' : 'default'; },
       layout:{padding:{top:4,right:8,bottom:0,left:0}},
       elements:{ line:{borderWidth:2.5, tension:.35}, point:{radius:0, hoverRadius:5, hitRadius:14, borderWidth:2, backgroundColor:'#fff'} },
       plugins:{
@@ -937,6 +955,65 @@ function pintarTablero(){
     });
   }
   dibujarGraficos();
+}
+
+/* Detalle de una toma: cuadro emergente al hacer clic en el gráfico */
+function mostrarDetalleToma(prId, ts){
+  const pr = DB.Producciones.find(p=>p.id===prId); if(!pr) return;
+  const prod = prodPorId(pr.producto_id);
+  const meds = medicionesDe(prId).filter(m=>m.timestamp===ts);
+  if(!meds.length) return;
+  const valDe = (vid,mp)=>{ const m=meds.find(x=>x.variable_id===vid && (mp?x.mp_id===mp:(x.mp_id===''||x.mp_id==null))); return m?num(m.valor):null; };
+  const idsFlujo=['V17','V18','V19'];
+
+  // Variables de proceso (no por MP, no flujos)
+  const procVars = DB.Variables.filter(v=>String(v.por_mp).toUpperCase()!=='SI' && !idsFlujo.includes(v.id) && meds.some(m=>m.variable_id===v.id))
+    .sort((a,b)=>(num(a.orden)||0)-(num(b.orden)||0));
+  const procHtml = procVars.length ? `<div class="dt-grid">${procVars.map(v=>`<div class="dt-item"><span>${esc(v.nombre)}</span><b>${f2(valDe(v.id))} <i>${esc(v.unidad)}</i></b></div>`).join('')}</div>` : '';
+
+  // Flujos
+  const pt=valDe('V17'), fi=valDe('V18'), gr=valDe('V19'), tot=(pt||0)+(fi||0)+(gr||0);
+  const pctF = v => tot>0 ? f1((v||0)/tot*100) : '—';
+  const flujoHtml = (pt!=null||fi!=null||gr!=null) ? `<h4 class="dt-sub">Flujos de salida</h4><div class="dt-grid">
+      <div class="dt-item"><span>Producto terminado</span><b>${f1(pt)} <i>kg/min · ${pctF(pt)}%</i></b></div>
+      <div class="dt-item"><span>Finos</span><b>${f1(fi)} <i>kg/min · ${pctF(fi)}%</i></b></div>
+      <div class="dt-item"><span>Gruesos</span><b>${f1(gr)} <i>kg/min · ${pctF(gr)}%</i></b></div>
+    </div>` : '';
+
+  // Materias primas (humedad / kg/min real vs objetivo)
+  const vig = versionVigente(prId, ts);
+  const props = vig ? proporcionesReceta(vig.filas) : {};
+  const feed = valDe('V15')!=null ? valDe('V15') : (vig?vig.alimObjetivo:null);
+  const mpRows = mpsDeProducto(prod.id).map(m=>{
+    const hum=valDe('V03',m.id), real=valDe('V16',m.id);
+    if(hum==null && real==null) return '';
+    const obj=objetivoKgMin(props[m.id], feed);
+    let desv='—';
+    if(real!=null && obj!=null && obj!==0){
+      const d=(real-obj)/obj*100, a=Math.abs(d);
+      const c=a<=5?['var(--okbg)','var(--ok)']:a<=10?['var(--warnbg)','var(--warn)']:['var(--malbg)','var(--mal)'];
+      desv=`<span class="semaforo" style="background:${c[0]};color:${c[1]}">${d>0?'+':''}${f1(d)}%</span>`;
+    }
+    return `<tr><td>${esc(m.nombre)}</td><td class="num">${hum!=null?f1(hum)+'%':'—'}</td><td class="num">${real!=null?f1(real):'—'}</td><td class="num">${obj!=null?f1(obj):'—'}</td><td>${desv}</td></tr>`;
+  }).filter(Boolean).join('');
+  const mpHtml = mpRows ? `<h4 class="dt-sub">Materias primas ${vig?`<span class="chip neutro mono" style="font-size:11px">receta v${vig.version}${feed!=null?' · '+f1(feed)+' TM/h':''}</span>`:''}</h4>
+    <table><thead><tr><th>MP</th><th class="num">Hum.</th><th class="num">kg/min real</th><th class="num">objetivo</th><th>Desv.</th></tr></thead><tbody>${mpRows}</tbody></table>` : '';
+
+  const bg = document.createElement('div');
+  bg.className='modal-bg';
+  bg.innerHTML = `<div class="modal">
+    <div class="dt-head"><h3>${esc(prod.nombre)}</h3><button class="dt-cerrar" aria-label="Cerrar">✕</button></div>
+    <div class="dt-fecha">Toma del ${fFecha(ts)}</div>
+    ${procHtml ? `<h4 class="dt-sub">Variables de proceso</h4>${procHtml}` : ''}
+    ${flujoHtml}
+    ${mpHtml}
+  </div>`;
+  const cerrar = ()=>{ bg.remove(); document.removeEventListener('keydown', onEsc); };
+  function onEsc(e){ if(e.key==='Escape') cerrar(); }
+  bg.addEventListener('click', e=>{ if(e.target===bg) cerrar(); });
+  bg.querySelector('.dt-cerrar').onclick = cerrar;
+  document.addEventListener('keydown', onEsc);
+  document.body.appendChild(bg);
 }
 
 /* =====================================================================
