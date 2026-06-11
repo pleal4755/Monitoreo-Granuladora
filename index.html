@@ -187,6 +187,12 @@ function proporcionesReceta(filas){
   return out;
 }
 function medicionesDe(prId){ return DB.Mediciones.filter(m=>m.produccion_id===prId); }
+// Último valor registrado de una variable (y MP) en la producción; para precargar humedad/ratio
+function ultimaMedicion(prId, vid, mpId){
+  const ms = DB.Mediciones.filter(m=>m.produccion_id===prId && m.variable_id===vid && (mpId ? m.mp_id===mpId : (m.mp_id===''||m.mp_id==null)))
+    .sort((a,b)=>String(b.timestamp).localeCompare(String(a.timestamp)));
+  return ms.length ? num(ms[0].valor) : null;
+}
 
 /* ------------------------------------------------ capa API */
 async function apiGet(){
@@ -215,7 +221,7 @@ function cargarDemo(){
     ['V03','Humedad materias primas','%','30min','SI',3],['V04','Dureza producto terminado','kgf','30min','NO',4],
     ['V05','Brix vinaza','°Bx','30min','NO',5],['V06','Velocidad del plato','Hz','30min','NO',6],
     ['V07','Amperaje del plato','A','30min','NO',7],['V08','Amperaje del horno','A','30min','NO',8],
-    ['V09','Velocidad del horno','RPM','30min','NO',9],['V10','Temperatura producto terminado','°C','30min','NO',10],
+    ['V09','Velocidad del horno','Hz','30min','NO',9],['V10','Temperatura producto terminado','°C','30min','NO',10],
     ['V11','Velocidad banda reproceso tolva 6','Hz','30min','NO',11],['V12','Temperatura salida del horno','°C','30min','NO',12],
     ['V13','Temperatura entrada del horno','°C','30min','NO',13],['V14','Apertura blower','%','30min','NO',14],
     ['V15','Ratio alimentación','TM/h','30min','NO',15],
@@ -439,7 +445,8 @@ function pintarFormCaptura(){
   const mpsHum = mps.filter(m=>tipoMedMP(m)==='humedad');
   const receta = versionVigente(prId);
   const props = receta ? proporcionesReceta(receta.filas) : {};
-  const feedDefault = receta && receta.alimObjetivo!=null ? receta.alimObjetivo : '';
+  const ultFeed = ultimaMedicion(prId, 'V15');   // último ratio de alimentación ingresado
+  const feedDefault = ultFeed!=null ? ultFeed : (receta && receta.alimObjetivo!=null ? receta.alimObjetivo : '');
   const hayDosis = midePorMP.some(v=>v.id==='V16') && mps.length;
   const hayHum = midePorMP.some(v=>v.id==='V03') && mpsHum.length;
 
@@ -479,19 +486,22 @@ function pintarFormCaptura(){
       ${hayDosis && !receta ? '<div class="aviso err">Esta producción no tiene receta registrada: no se pueden calcular objetivos. Registrala en la pestaña Receta.</div>' : ''}
       ${feedVar ? `<div class="campo" id="cap-alim-wrap" style="max-width:240px;margin-bottom:10px"><label>Alimentación actual <span class="unidad">(TM/h)</span></label><input type="number" step="0.1" min="0" id="cap-alim" class="cap-var" data-v="V15" value="${feedDefault}"></div>
       <p class="muted" style="margin-top:-4px">El kg/min objetivo de cada MP se recalcula con este ritmo. Objetivo = proporción × TM/h × 1000 / 60.</p>` : ''}
+      ${hayHum?`<p class="muted" style="margin-top:-4px;margin-bottom:8px">La humedad viene precargada con la última registrada (al inicio, la del arranque). Cambiala solo si hubo variación.</p>`:''}
       <table><thead><tr><th>MP</th>
         ${hayHum?'<th class="num" data-col="hum">Humedad %</th>':''}
         ${hayDosis?'<th class="num" data-col="dosis">% receta</th><th class="num" data-col="dosis">kg/min objetivo</th><th class="num" data-col="dosis">kg/min real</th><th data-col="dosis">Desv.</th>':''}
       </tr></thead><tbody>
-      ${mps.map(m=>`<tr>
+      ${mps.map(m=>{
+        const humDef = ultimaMedicion(prId, 'V03', m.id);
+        return `<tr>
         <td>${esc(m.nombre)}</td>
-        ${hayHum?`<td class="num" data-col="hum"><input type="number" step="0.1" class="cap-mp" data-v="V03" data-mp="${m.id}" style="max-width:100px;margin-left:auto"></td>`:''}
+        ${hayHum?`<td class="num" data-col="hum"><input type="number" step="0.1" class="cap-mp" data-v="V03" data-mp="${m.id}" value="${humDef!=null?humDef:''}" style="max-width:100px;margin-left:auto"></td>`:''}
         ${hayDosis?`
           <td class="num" data-col="dosis">${props[m.id]!=null?f1(props[m.id])+' %':'—'}</td>
           <td class="num cap-obj" data-col="dosis" data-mp="${m.id}">—</td>
           <td class="num" data-col="dosis"><input type="number" step="0.1" class="cap-mp cap-dosis" data-v="V16" data-mp="${m.id}" style="max-width:100px;margin-left:auto"></td>
           <td data-col="dosis"><span class="semaforo" data-sem="${m.id}">—</span></td>`:''}
-      </tr>`).join('')}
+      </tr>`;}).join('')}
       </tbody></table></div>`;
   }
 
