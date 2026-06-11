@@ -156,7 +156,7 @@ const prodPorId = id => DB.Productos.find(p=>p.id===id);
 const varPorId  = id => DB.Variables.find(v=>v.id===id);
 const mpPorId   = id => DB.MateriasPrimas.find(m=>m.id===id);
 const esOM = p => p && String(p.tipo).toUpperCase()==='OM';
-const tipoMedMP = m => String((m&&m.tipo_medicion)||'humedad').toLowerCase()==='brix' ? 'brix' : 'humedad';
+const tipoMedMP = m => { const t=String((m&&m.tipo_medicion)||'humedad').toLowerCase(); return (t==='brix'||t==='ninguno')?t:'humedad'; };
 const enReceta = m => String((m&&m.en_receta)||'SI').toUpperCase()!=='NO';
 // kg/min objetivo = proporción(%) × alimentación(TM/h) × 1000 / 60
 const objetivoKgMin = (propPct, feedTMh) => (feedTMh>0 && propPct!=null) ? propPct/100*feedTMh*1000/60 : null;
@@ -232,14 +232,17 @@ function cargarDemo(){
     {id:'MP01',nombre:'Yeso',unidad:'TM',precio:520,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP02',nombre:'Pulverizado Calizo',unidad:'TM',precio:430,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},
     {id:'MP03',nombre:'TSP',unidad:'TM',precio:5600,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP04',nombre:'Compost',unidad:'TM',precio:780,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},
     {id:'MP05',nombre:'Bentonita',unidad:'TM',precio:2100,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP06',nombre:'Octoborato',unidad:'TM',precio:9800,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},
-    {id:'MP07',nombre:'Sulfato de Zinc',unidad:'TM',precio:7400,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP08',nombre:'Vinaza',unidad:'TM',precio:120,tipo_medicion:'brix',en_receta:'NO',activo:'SI'}];
-  DB.ProductoMP=[['P01','MP01'],['P01','MP08'],['P02','MP02'],['P02','MP08'],
-    ['P03','MP03'],['P03','MP04'],['P03','MP05'],['P03','MP08'],
-    ['P04','MP04'],['P04','MP05'],['P04','MP08'],
-    ['P05','MP04'],['P05','MP06'],['P05','MP07'],['P05','MP05'],['P05','MP08']].map(a=>({producto_id:a[0],mp_id:a[1]}));
+    {id:'MP07',nombre:'Sulfato de Zinc',unidad:'TM',precio:7400,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP08',nombre:'Vinaza',unidad:'gal',precio:8,tipo_medicion:'brix',en_receta:'NO',activo:'SI'},
+    {id:'MP09',nombre:'Gas Propano',unidad:'gal',precio:21,tipo_medicion:'ninguno',en_receta:'NO',activo:'SI'}];
+  DB.ProductoMP=[['P01','MP01'],['P01','MP08'],['P01','MP09'],['P02','MP02'],['P02','MP08'],['P02','MP09'],
+    ['P03','MP03'],['P03','MP04'],['P03','MP05'],['P03','MP08'],['P03','MP09'],
+    ['P04','MP04'],['P04','MP05'],['P04','MP08'],['P04','MP09'],
+    ['P05','MP04'],['P05','MP06'],['P05','MP07'],['P05','MP05'],['P05','MP08'],['P05','MP09']].map(a=>({producto_id:a[0],mp_id:a[1]}));
   // producción de ejemplo — receta por PROPORCIÓN (sin vinaza), alimentación 15 TM/h
   const t0 = Date.now() - 5*1800000;
-  DB.Producciones=[{id:'PRdemo',producto_id:'P03',fecha_inicio:new Date(t0).toISOString(),fecha_fin:'',estado:'En curso',operador:'Demo',turno:'A',tm_producidas:'',costo_total:'',costo_primo:''}];
+  DB.Producciones=[
+    {id:'PRprev',producto_id:'P03',fecha_inicio:new Date(t0-3*86400000).toISOString(),fecha_fin:new Date(t0-3*86400000+6*3600000).toISOString(),estado:'Cerrada',operador:'Demo',turno:'A',tm_producidas:118,costo_total:286000,costo_primo:2423.73},
+    {id:'PRdemo',producto_id:'P03',fecha_inicio:new Date(t0).toISOString(),fecha_fin:'',estado:'En curso',operador:'Demo',turno:'A',tm_producidas:'',costo_total:'',costo_primo:''}];
   const props={MP03:25,MP04:65,MP05:10}; // % (vinaza fuera de receta)
   DB.Recetas=Object.keys(props).map((mp,i)=>({produccion_id:'PRdemo',version:1,mp_id:mp,proporcion:props[mp],timestamp:new Date(t0).toISOString(),nota:i===0?'Receta inicial':'',alim_objetivo:15}));
   DB.Mediciones=[]; DB.Consumos=[];
@@ -334,18 +337,20 @@ function pintarSeccionOM(){
   const p = prodPorId($('#np-prod').value);
   const cont = $('#np-om');
   if(!esOM(p)){ cont.innerHTML=''; return; }
-  const mps = mpsDeProducto(p.id);
+  const mps = mpsDeProducto(p.id).filter(m=>tipoMedMP(m)!=='ninguno' || enReceta(m)); // gas/combustibles solo se costean en cierre
   cont.innerHTML = `
     <h3>Medición inicial y receta de proporciones (v1)</h3>
-    <p class="muted">La receta se define como <strong>proporción (%)</strong> de cada materia prima. Los kg/min objetivo se calculan según la alimentación objetivo (TM/h) y se recalculan en cada toma con el ritmo real.</p>
+    <p class="muted">La receta se define como <strong>proporción (%)</strong> de cada materia prima. Los kg/min objetivo se calculan según la alimentación objetivo (TM/h) y se recalculan en cada toma con el ritmo real. La vinaza y el gas no entran en la receta; sus consumos se ingresan en el cierre.</p>
     <div class="campo" style="max-width:240px;margin-bottom:10px"><label>Alimentación objetivo <span class="unidad">(TM/h)</span></label><input type="number" step="0.1" min="0" id="np-alim" placeholder="Ej. 15"></div>
     <table><thead><tr><th>Materia prima</th><th class="num">Medición inicial</th><th class="num">Proporción (%)</th><th class="num">% normalizado</th><th class="num">kg/min objetivo</th></tr></thead>
     <tbody>${mps.map(m=>{
-      const brix = tipoMedMP(m)==='brix';
+      const tipo = tipoMedMP(m);
       const dosifica = enReceta(m);
       return `<tr>
       <td>${esc(m.nombre)}</td>
-      <td class="num"><input type="number" step="0.1" min="0" class="np-ini" data-mp="${m.id}" data-tipo="${brix?'brix':'humedad'}" placeholder="${brix?'°Bx':'% hum'}" style="max-width:110px;margin-left:auto"></td>
+      ${tipo==='ninguno'
+        ? `<td class="num muted">—</td>`
+        : `<td class="num"><input type="number" step="0.1" min="0" class="np-ini" data-mp="${m.id}" data-tipo="${tipo}" placeholder="${tipo==='brix'?'°Bx':'% hum'}" style="max-width:110px;margin-left:auto"></td>`}
       ${dosifica
         ? `<td class="num"><input type="number" step="0.1" min="0" class="np-prop" data-mp="${m.id}" style="max-width:100px;margin-left:auto"></td>
            <td class="num np-pnorm" data-mp="${m.id}">—</td>
@@ -661,15 +666,23 @@ function pintarCierre(){
   const pr=DB.Producciones.find(p=>p.id===prId);
   const prod=prodPorId(pr.producto_id);
   const mps=mpsDeProducto(prod.id);
+  const cerradas=DB.Producciones.filter(p=>p.estado==='Cerrada' && num(p.costo_primo)!=null && p.id!==prId)
+    .sort((a,b)=>String(b.fecha_inicio).localeCompare(String(a.fecha_inicio)));
 
   $('#cie-cuerpo').innerHTML = `
     <div class="carta">
       <h3>Consumos totales — ${esc(prod.nombre)}</h3>
-      <p class="muted">Ingresá las cantidades totales consumidas en la corrida. El precio se precarga desde la configuración y puede ajustarse. Agregá insumos adicionales (combustible, energía, sacos…) con el botón.</p>
+      <p class="muted">Ingresá las cantidades totales consumidas en la corrida. El precio se precarga desde la configuración y puede ajustarse. Agregá insumos adicionales (energía, sacos…) con el botón.</p>
       <div style="overflow-x:auto"><table id="cie-tabla"><thead><tr><th>Insumo</th><th class="num">Cantidad</th><th>Unidad</th><th class="num">Precio unit. (Q)</th><th class="num">Costo</th><th></th></tr></thead><tbody>
       ${mps.map(m=>filaConsumo(m.nombre, m.unidad, num(m.precio)||0)).join('')}
       </tbody></table></div>
       <div style="margin-top:10px"><button class="btn sec peq" id="cie-agregar">+ Agregar insumo</button></div>
+    </div>
+    <div class="carta">
+      <h3>Reproceso aplicado</h3>
+      <p class="muted">Producto de producciones anteriores que se reincorpora. Elegí la producción de origen para jalar su costo primo, o "Manual" para producciones antiguas que aún no están en el sistema.</p>
+      <div style="overflow-x:auto"><table id="cie-rep"><thead><tr><th>Origen</th><th class="num">Cantidad</th><th>Unidad</th><th class="num">Costo unit. (Q)</th><th class="num">Costo</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div style="margin-top:10px"><button class="btn sec peq" id="cie-rep-add">+ Agregar reproceso</button></div>
     </div>
     <div class="carta">
       <h3>Resultado</h3>
@@ -679,12 +692,13 @@ function pintarCierre(){
         <div class="campo"><label>Costo primo (Q/TM)</label><div class="mono" id="cie-primo" style="font-size:20px;font-weight:700;padding:8px 0;color:var(--verde)">—</div></div>
       </div>
       <div style="margin-top:12px"><button class="btn" id="cie-cerrar">Cerrar producción</button></div>
-      <p class="muted" style="margin-top:8px">Al cerrar, la producción queda bloqueada para captura y los consumos se guardan en la hoja.</p>
+      <p class="muted" style="margin-top:8px">Al cerrar, la producción queda bloqueada para captura y los consumos (incluido el reproceso) se guardan en la hoja.</p>
     </div>`;
 
+  const filasTodas = ()=>[].concat($$('#cie-tabla tbody tr'), $$('#cie-rep tbody tr'));
   const recalc = ()=>{
     let total=0;
-    $$('#cie-tabla tbody tr').forEach(tr=>{
+    filasTodas().forEach(tr=>{
       const c=num(tr.querySelector('.cie-cant').value)||0, p=num(tr.querySelector('.cie-precio').value)||0;
       const costo=c*p; total+=costo;
       tr.querySelector('.cie-costo').textContent=fQ(costo);
@@ -694,12 +708,29 @@ function pintarCierre(){
     $('#cie-primo').textContent = tm>0 ? fQ(total/tm) : '—';
   };
   const enganchar = tr=>{ tr.querySelectorAll('input').forEach(i=>i.oninput=recalc); const x=tr.querySelector('.cie-x'); if(x) x.onclick=()=>{ tr.remove(); recalc(); }; };
+  const engancharRep = tr=>{
+    const sel=tr.querySelector('.cie-rep-src'), precio=tr.querySelector('.cie-precio'), nombre=tr.querySelector('.cie-nombre');
+    const aplicarSrc=()=>{
+      const op=sel.selectedOptions[0];
+      if(sel.value==='manual'){ precio.readOnly=false; precio.style.background=''; nombre.value='Reproceso (manual)'; }
+      else { const primo=num(op.dataset.primo); precio.value=primo!=null?primo:''; precio.readOnly=true; precio.style.background='#EFEEE6'; nombre.value='Reproceso: '+(op.dataset.desc||op.value); }
+      recalc();
+    };
+    sel.onchange=aplicarSrc; aplicarSrc();
+    tr.querySelectorAll('input').forEach(i=>i.oninput=recalc);
+    const x=tr.querySelector('.cie-x'); if(x) x.onclick=()=>{ tr.remove(); recalc(); };
+  };
   $$('#cie-tabla tbody tr').forEach(enganchar);
   $('#cie-tm').oninput=recalc;
   $('#cie-agregar').onclick=()=>{
     const tb=$('#cie-tabla tbody'); const tr=document.createElement('tr');
     tr.innerHTML=filaConsumo('', 'gal', 0, true).replace(/^<tr>|<\/tr>$/g,'');
     tb.appendChild(tr); enganchar(tr);
+  };
+  $('#cie-rep-add').onclick=()=>{
+    const tb=$('#cie-rep tbody'); const tr=document.createElement('tr');
+    tr.innerHTML=filaReproceso(cerradas).replace(/^<tr>|<\/tr>$/g,'');
+    tb.appendChild(tr); engancharRep(tr);
   };
 
   $('#cie-cerrar').onclick = async ()=>{
@@ -708,7 +739,7 @@ function pintarCierre(){
       const tm=num($('#cie-tm').value);
       if(tm==null||tm<=0){ toast('Ingresá las TM producidas.'); btn.disabled=false; return; }
       const filas=[]; let total=0;
-      $$('#cie-tabla tbody tr').forEach(tr=>{
+      filasTodas().forEach(tr=>{
         const nombre = tr.querySelector('.cie-nombre') ? tr.querySelector('.cie-nombre').value : tr.querySelector('td').textContent;
         const c=num(tr.querySelector('.cie-cant').value), p=num(tr.querySelector('.cie-precio').value)||0;
         const u=tr.querySelector('.cie-uni') ? tr.querySelector('.cie-uni').value : tr.children[2].textContent;
@@ -725,6 +756,25 @@ function pintarCierre(){
     }catch(err){ toast('Error: '+err.message,4000); }
     btn.disabled=false;
   };
+}
+
+function filaReproceso(cerradas){
+  const ops = cerradas.map(p=>{
+    const pr=prodPorId(p.producto_id)||{};
+    const desc = (pr.nombre||'?')+' · '+fFecha(p.fecha_inicio);
+    return `<option value="${p.id}" data-primo="${num(p.costo_primo)}" data-desc="${esc(desc)}">${esc(desc)} · ${fQ(num(p.costo_primo))}/TM</option>`;
+  }).join('');
+  return `<tr>
+    <td><select class="cie-rep-src" style="min-width:200px">
+        <option value="manual" data-primo="">Manual (producción antigua)</option>
+        ${ops}
+      </select><input type="hidden" class="cie-nombre" value="Reproceso (manual)"></td>
+    <td class="num"><input type="number" step="any" min="0" class="cie-cant" style="max-width:110px;margin-left:auto"></td>
+    <td><input class="cie-uni" value="TM" style="max-width:70px"></td>
+    <td class="num"><input type="number" step="any" min="0" class="cie-precio" placeholder="Q/TM" style="max-width:110px;margin-left:auto"></td>
+    <td class="num cie-costo">Q 0.00</td>
+    <td><button class="btn sec peq cie-x">✕</button></td>
+  </tr>`;
 }
 
 function filaConsumo(nombre, unidad, precio, editable){
@@ -951,9 +1001,9 @@ function cfgVariables(){
   $('#cfg-guardar').onclick=()=>{ const filas=leerTabla(cols); guardarConfig('Variables', filas, fs=>{ DB.Variables=fs.map(f=>({id:f[0],nombre:f[1],unidad:f[2],momento:f[3],por_mp:f[4],orden:f[5]})); }); };
 }
 function cfgMPs(){
-  const cols=[{campo:'id',titulo:'ID'},{campo:'nombre',titulo:'Nombre'},{campo:'unidad',titulo:'Unidad',def:'TM'},{campo:'precio',titulo:'Precio (Q)',tipo:'num',def:0},{campo:'tipo_medicion',titulo:'Medición inicial',tipo:'sel',ops:['humedad','brix'],def:'humedad'},{campo:'activo',titulo:'Activo',tipo:'sel',ops:['SI','NO'],def:'SI'}];
+  const cols=[{campo:'id',titulo:'ID'},{campo:'nombre',titulo:'Nombre'},{campo:'unidad',titulo:'Unidad',def:'TM'},{campo:'precio',titulo:'Precio (Q)',tipo:'num',def:0},{campo:'tipo_medicion',titulo:'Medición inicial',tipo:'sel',ops:['humedad','brix','ninguno'],def:'humedad'},{campo:'en_receta',titulo:'En receta',tipo:'sel',ops:['SI','NO'],def:'SI'},{campo:'activo',titulo:'Activo',tipo:'sel',ops:['SI','NO'],def:'SI'}];
   tablaEditable($('#cfg-cuerpo'), cols, DB.MateriasPrimas, 'MP');
-  $('#cfg-guardar').onclick=()=>{ const filas=leerTabla(cols); guardarConfig('MateriasPrimas', filas, fs=>{ DB.MateriasPrimas=fs.map(f=>({id:f[0],nombre:f[1],unidad:f[2],precio:f[3],tipo_medicion:f[4],activo:f[5]})); }); };
+  $('#cfg-guardar').onclick=()=>{ const filas=leerTabla(cols); guardarConfig('MateriasPrimas', filas, fs=>{ DB.MateriasPrimas=fs.map(f=>({id:f[0],nombre:f[1],unidad:f[2],precio:f[3],tipo_medicion:f[4],en_receta:f[5],activo:f[6]})); }); };
 }
 function matrizChecks(cont, filasItems, colsItems, relacion, claveFila, claveCol, hoja, setLocal){
   cont.innerHTML = `<div class="carta matriz-config"><div style="overflow-x:auto"><table><thead><tr><th></th>${colsItems.map(c=>`<th>${esc(c.nombre)}</th>`).join('')}</tr></thead><tbody>
