@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoreo Granuladora · BIOSKA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --fondo:#F2F1EB; --carta:#FFFFFF; --tinta:#22302B; --tinta2:#64716A;
+  --linea:#E0DED4; --verde:#1E5641; --verde-osc:#143D2E; --ambar:#D9822B;
+  --ok:#2E7D4F; --okbg:#E4F1E9; --warn:#B97A12; --warnbg:#FBF0DA; --mal:#C0392B; --malbg:#F9E5E1;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Archivo',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--fondo);color:var(--tinta);font-size:15px;line-height:1.45}
+header{background:var(--verde-osc);color:#F4F6F2;padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header .logo{font-weight:800;font-size:17px;letter-spacing:.04em}
+header .logo span{color:#E8B86B;font-weight:400}
+header .sub{font-size:12px;opacity:.75;margin-left:auto;font-family:var(--mono)}
+nav{display:flex;background:var(--verde);overflow-x:auto;position:sticky;top:0;z-index:50}
+nav button{flex:1;min-width:90px;padding:12px 8px;background:none;border:none;color:#CDE0D4;font-weight:600;font-size:13.5px;cursor:pointer;border-bottom:3px solid transparent;font-family:inherit;white-space:nowrap}
+nav button.activa{color:#fff;border-bottom-color:var(--ambar);background:rgba(255,255,255,.06)}
+main{max-width:1080px;margin:0 auto;padding:18px 14px 90px}
+h2{font-size:19px;font-weight:800;margin:6px 0 14px;letter-spacing:-.01em}
+h3{font-size:14px;font-weight:700;margin:18px 0 8px;color:var(--tinta2);text-transform:uppercase;letter-spacing:.06em}
+.carta{background:var(--carta);border:1px solid var(--linea);border-radius:12px;padding:16px;margin-bottom:14px}
+.fila{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.campo{display:flex;flex-direction:column;gap:4px;flex:1;min-width:130px}
+.campo label{font-size:12px;font-weight:600;color:var(--tinta2)}
+.campo .unidad{font-weight:400;color:#9AA59E}
+input,select,textarea{padding:9px 10px;border:1px solid var(--linea);border-radius:8px;font-size:15px;font-family:inherit;background:#FCFBF8;width:100%}
+input[type=number]{font-family:var(--mono);font-size:16px}
+input:focus,select:focus{outline:2px solid var(--verde);outline-offset:0;border-color:var(--verde)}
+button.btn{background:var(--verde);color:#fff;border:none;border-radius:9px;padding:11px 18px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+button.btn:hover{background:var(--verde-osc)}
+button.btn.sec{background:#EDEBE2;color:var(--tinta)}
+button.btn.peq{padding:6px 12px;font-size:13px;border-radius:7px}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;padding:8px 8px;border-bottom:2px solid var(--linea);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--tinta2)}
+td{padding:8px;border-bottom:1px solid var(--linea);vertical-align:middle}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+.chip{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700}
+.chip.ok{background:var(--okbg);color:var(--ok)} .chip.warn{background:var(--warnbg);color:var(--warn)}
+.chip.mal{background:var(--malbg);color:var(--mal)} .chip.neutro{background:#ECEAE1;color:var(--tinta2)}
+.chip.om{background:#E3EDE7;color:var(--verde)} .chip.filler{background:#F3E8D8;color:#9A6516}
+.aviso{padding:10px 14px;border-radius:9px;font-size:14px;margin:10px 0}
+.aviso.err{background:var(--malbg);color:var(--mal)} .aviso.ok{background:var(--okbg);color:var(--ok)}
+.aviso.info{background:#E8EEF5;color:#33546E}
+.malla-vars{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}
+.var-card{background:#FBFAF6;border:1px solid var(--linea);border-radius:10px;padding:10px}
+.var-card label{display:block;font-size:12px;font-weight:600;color:var(--tinta2);min-height:30px;line-height:1.25}
+.var-card .unidad{color:#9AA59E;font-weight:400}
+.barra-flujo{display:flex;height:34px;border-radius:8px;overflow:hidden;border:1px solid var(--linea);margin-top:8px;font-family:var(--mono);font-size:12px;color:#fff}
+.barra-flujo div{display:flex;align-items:center;justify-content:center;min-width:0;transition:width .25s;white-space:nowrap;overflow:hidden}
+.bf-pt{background:var(--verde)} .bf-fi{background:var(--ambar)} .bf-gr{background:#8C6A4F}
+.leyenda{display:flex;gap:14px;font-size:12.5px;color:var(--tinta2);margin-top:6px;flex-wrap:wrap}
+.leyenda i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.grid-graficos{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.graf{background:var(--carta);border:1px solid var(--linea);border-radius:12px;padding:12px}
+.graf h4{font-size:13.5px;font-weight:700;margin-bottom:8px}
+.graf .lienzo{position:relative;height:240px}
+.selector-graficos{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.selector-graficos label{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--linea);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer}
+.selector-graficos label.on{border-color:var(--verde);background:#EAF2ED;font-weight:600}
+.selector-graficos input{width:auto}
+.oculto{display:none!important}
+.panel-params{background:var(--carta);border:1px solid var(--linea);border-radius:12px;padding:0 16px;margin-bottom:14px}
+.panel-params summary{cursor:pointer;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta2);padding:14px 0;list-style:none;display:flex;align-items:center;gap:8px}
+.panel-params summary::before{content:'▸';transition:transform .2s;color:var(--verde)}
+.panel-params[open] summary::before{transform:rotate(90deg)}
+.panel-params .selector-graficos{margin:0 0 14px}
+#cargando{position:fixed;inset:0;background:var(--fondo);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:200}
+.girador{width:38px;height:38px;border:4px solid var(--linea);border-top-color:var(--verde);border-radius:50%;animation:gira 0.9s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--tinta);color:#fff;padding:11px 20px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:300;max-width:90vw}
+#toast.ver{opacity:1}
+.matriz-config{overflow-x:auto}
+.matriz-config th,.matriz-config td{text-align:center;font-size:12px;padding:5px 6px}
+.matriz-config td:first-child,.matriz-config th:first-child{text-align:left;white-space:nowrap}
+.tab-config{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab-config button{padding:7px 13px;border-radius:8px;border:1px solid var(--linea);background:#fff;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit}
+.tab-config button.on{background:var(--verde);color:#fff;border-color:var(--verde)}
+.semaforo{font-family:var(--mono);font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
+.lista-prod .item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--linea);flex-wrap:wrap}
+.lista-prod .item:last-child{border-bottom:none}
+.muted{color:var(--tinta2);font-size:13px}
+.mono{font-family:var(--mono)}
+@media (max-width:600px){ main{padding:12px 8px 90px} .carta{padding:12px} .malla-vars{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))} }
+</style>
+</head>
+<body>
+<div id="cargando"><div class="girador"></div><div class="muted" id="cargando-txt">Cargando datos de la planta…</div></div>
+
+<header>
+  <div class="logo">GRANULADORA · MONITOREO <span>BIOSKA</span></div>
+  <div class="sub" id="estado-conexion"></div>
+</header>
+
+<nav id="nav">
+  <button data-v="producciones" class="activa">Producciones</button>
+  <button data-v="captura">Captura 30'</button>
+  <button data-v="receta">Receta</button>
+  <button data-v="tablero">Tablero</button>
+  <button data-v="cierre">Cierre</button>
+  <button data-v="config">Config</button>
+</nav>
+
+<main>
+  <section id="v-producciones"></section>
+  <section id="v-captura" hidden></section>
+  <section id="v-receta" hidden></section>
+  <section id="v-tablero" hidden></section>
+  <section id="v-cierre" hidden></section>
+  <section id="v-config" hidden></section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   MONITOREO GRANULADORA — BIOSKA
+   App standalone (GitHub Pages) + Google Sheets vía Apps Script.
+   1) Pegar la URL /exec de la implementación del Apps Script en API_URL.
+   2) Si API_URL queda vacía, la app corre en MODO DEMO (datos locales,
+      no se guarda nada) para poder probarla antes de conectarla.
+===================================================================== */
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbyS8-H91-VJDPf_SBnyBE3NwapYgIv6AvJ7EqpdKQgR0-3-gHPv9PI8LrREiVElmK7eCw/exec'
+
+const DB = { Productos:[], Variables:[], ProductoVariables:[], MateriasPrimas:[], ProductoMP:[], Producciones:[], Recetas:[], Mediciones:[], Consumos:[] };
+const DEMO = !API_URL;
+let vistaActual = 'producciones';
+let charts = [];
+
+/* ------------------------------------------------ utilidades base */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+const num = v => { const n = parseFloat(String(v).replace(',','.')); return isNaN(n) ? null : n; };
+const f1 = v => v==null||isNaN(v) ? '—' : (Math.round(v*10)/10).toLocaleString('es-GT');
+const f2 = v => v==null||isNaN(v) ? '—' : (Math.round(v*100)/100).toLocaleString('es-GT',{minimumFractionDigits:2});
+const fQ = v => v==null||isNaN(v) ? '—' : 'Q ' + v.toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fHora = iso => { const d=new Date(iso); return isNaN(d)?'—':d.toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'}); };
+const fFecha = iso => { const d=new Date(iso); return isNaN(d)?'—':d.toLocaleDateString('es-GT',{day:'2-digit',month:'short'}) + ' ' + fHora(iso); };
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg, ms){ const t=$('#toast'); t.textContent=msg; t.classList.add('ver'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('ver'), ms||2600); }
+function lsGet(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){ return d; } }
+function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+/* ------------------------------------------------ accesos a datos */
+const prodPorId = id => DB.Productos.find(p=>p.id===id);
+const varPorId  = id => DB.Variables.find(v=>v.id===id);
+const mpPorId   = id => DB.MateriasPrimas.find(m=>m.id===id);
+const esOM = p => p && String(p.tipo).toUpperCase()==='OM';
+const tipoMedMP = m => String((m&&m.tipo_medicion)||'humedad').toLowerCase()==='brix' ? 'brix' : 'humedad';
+const enReceta = m => String((m&&m.en_receta)||'SI').toUpperCase()!=='NO';
+// kg/min objetivo = proporción(%) × alimentación(TM/h) × 1000 / 60
+const objetivoKgMin = (propPct, feedTMh) => (feedTMh>0 && propPct!=null) ? propPct/100*feedTMh*1000/60 : null;
+
+function varsDeProducto(pid){
+  const ids = DB.ProductoVariables.filter(r=>r.producto_id===pid).map(r=>r.variable_id);
+  return DB.Variables.filter(v=>ids.includes(v.id)).sort((a,b)=>(num(a.orden)||0)-(num(b.orden)||0));
+}
+function mpsDeProducto(pid){
+  const ids = DB.ProductoMP.filter(r=>r.producto_id===pid).map(r=>r.mp_id);
+  return DB.MateriasPrimas.filter(m=>ids.includes(m.id) && String(m.activo).toUpperCase()!=='NO');
+}
+function mpsReceta(pid){ return mpsDeProducto(pid).filter(enReceta); }
+function produccionesEnCurso(){ return DB.Producciones.filter(p=>p.estado==='En curso').sort((a,b)=>String(b.fecha_inicio).localeCompare(String(a.fecha_inicio))); }
+function recetasDe(prId){ return DB.Recetas.filter(r=>r.produccion_id===prId); }
+function versionVigente(prId, enFecha){
+  const rs = recetasDe(prId).filter(r=>!enFecha || new Date(r.timestamp)<=new Date(enFecha));
+  if(!rs.length) return null;
+  const v = Math.max(...rs.map(r=>num(r.version)||1));
+  const filas = recetasDe(prId).filter(r=>(num(r.version)||1)===v);
+  return { version:v, filas, alimObjetivo: num(filas[0] && filas[0].alim_objetivo) };
+}
+// Devuelve la proporción normalizada (%) de cada MP a partir de los valores ingresados.
+function proporcionesReceta(filas){
+  const tot = filas.reduce((s,r)=>s+(num(r.proporcion)||0),0);
+  const out = {};
+  filas.forEach(r=>{ out[r.mp_id] = tot>0 ? (num(r.proporcion)||0)/tot*100 : 0; });
+  return out;
+}
+function medicionesDe(prId){ return DB.Mediciones.filter(m=>m.produccion_id===prId); }
+
+/* ------------------------------------------------ capa API */
+async function apiGet(){
+  if(DEMO){ cargarDemo(); return; }
+  const r = await fetch(API_URL + '?accion=todo&dias=120');
+  const j = await r.json();
+  if(!j.ok) throw new Error(j.error||'Error al leer datos');
+  Object.keys(DB).forEach(k=>{ DB[k] = j.datos[k]||[]; });
+}
+async function apiPost(cuerpo){
+  if(DEMO){ return {ok:true, demo:true}; }
+  const r = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(cuerpo) });
+  const j = await r.json();
+  if(!j.ok) throw new Error(j.error||'Error al guardar');
+  return j;
+}
+async function appendFilas(hoja, filas){ return apiPost({accion:'append', hoja, filas}); }
+
+/* ------------------------------------------------ datos demo */
+function cargarDemo(){
+  DB.Productos = [
+    {id:'P01',nombre:'Yeso Granulado',tipo:'Filler',activo:'SI'},{id:'P02',nombre:'NORFIL',tipo:'Filler',activo:'SI'},
+    {id:'P03',nombre:'MasFos',tipo:'OM',activo:'SI'},{id:'P04',nombre:'MasSi',tipo:'OM',activo:'SI'},{id:'P05',nombre:'OM03',tipo:'OM',activo:'SI'}];
+  DB.Variables = [
+    ['V01','Humedad salida de plato','%','30min','NO',1],['V02','Humedad producto terminado','%','30min','NO',2],
+    ['V03','Humedad materias primas','%','30min','SI',3],['V04','Dureza producto terminado','kgf','30min','NO',4],
+    ['V05','Brix vinaza','°Bx','30min','NO',5],['V06','Velocidad del plato','Hz','30min','NO',6],
+    ['V07','Amperaje del plato','A','30min','NO',7],['V08','Amperaje del horno','A','30min','NO',8],
+    ['V09','Velocidad del horno','RPM','30min','NO',9],['V10','Temperatura producto terminado','°C','30min','NO',10],
+    ['V11','Velocidad banda reproceso tolva 6','Hz','30min','NO',11],['V12','Temperatura salida del horno','°C','30min','NO',12],
+    ['V13','Temperatura entrada del horno','°C','30min','NO',13],['V14','Apertura blower','%','30min','NO',14],
+    ['V15','Ratio alimentación','TM/h','30min','NO',15],
+    ['V16','Dosificación materias primas (real)','kg/min','30min','SI',16],
+    ['V17','Flujo producto terminado','kg/min','30min','NO',17],['V18','Flujo finos','kg/min','30min','NO',18],
+    ['V19','Flujo gruesos','kg/min','30min','NO',19]
+  ].map(a=>({id:a[0],nombre:a[1],unidad:a[2],momento:a[3],por_mp:a[4],orden:a[5]}));
+  const vf=['V01','V02','V04','V05','V06','V07','V08','V09','V10','V11','V12','V13','V14','V15','V17','V18','V19'];
+  const vo=vf.concat(['V03','V16']);
+  DB.ProductoVariables=[];
+  ['P01','P02'].forEach(p=>vf.forEach(v=>DB.ProductoVariables.push({producto_id:p,variable_id:v})));
+  ['P03','P04','P05'].forEach(p=>vo.forEach(v=>DB.ProductoVariables.push({producto_id:p,variable_id:v})));
+  DB.MateriasPrimas=[
+    {id:'MP01',nombre:'Yeso',unidad:'TM',precio:520,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP02',nombre:'Pulverizado Calizo',unidad:'TM',precio:430,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},
+    {id:'MP03',nombre:'TSP',unidad:'TM',precio:5600,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP04',nombre:'Compost',unidad:'TM',precio:780,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},
+    {id:'MP05',nombre:'Bentonita',unidad:'TM',precio:2100,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP06',nombre:'Octoborato',unidad:'TM',precio:9800,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},
+    {id:'MP07',nombre:'Sulfato de Zinc',unidad:'TM',precio:7400,tipo_medicion:'humedad',en_receta:'SI',activo:'SI'},{id:'MP08',nombre:'Vinaza',unidad:'TM',precio:120,tipo_medicion:'brix',en_receta:'NO',activo:'SI'}];
+  DB.ProductoMP=[['P01','MP01'],['P01','MP08'],['P02','MP02'],['P02','MP08'],
+    ['P03','MP03'],['P03','MP04'],['P03','MP05'],['P03','MP08'],
+    ['P04','MP04'],['P04','MP05'],['P04','MP08'],
+    ['P05','MP04'],['P05','MP06'],['P05','MP07'],['P05','MP05'],['P05','MP08']].map(a=>({producto_id:a[0],mp_id:a[1]}));
+  // producción de ejemplo — receta por PROPORCIÓN (sin vinaza), alimentación 15 TM/h
+  const t0 = Date.now() - 5*1800000;
+  DB.Producciones=[{id:'PRdemo',producto_id:'P03',fecha_inicio:new Date(t0).toISOString(),fecha_fin:'',estado:'En curso',operador:'Demo',turno:'A',tm_producidas:'',costo_total:'',costo_primo:''}];
+  const props={MP03:25,MP04:65,MP05:10}; // % (vinaza fuera de receta)
+  DB.Recetas=Object.keys(props).map((mp,i)=>({produccion_id:'PRdemo',version:1,mp_id:mp,proporcion:props[mp],timestamp:new Date(t0).toISOString(),nota:i===0?'Receta inicial':'',alim_objetivo:15}));
+  DB.Mediciones=[]; DB.Consumos=[];
+  const base={V01:11,V02:1.1,V04:3.2,V05:38,V06:9,V07:42,V08:65,V09:4.4,V10:104,V11:35,V12:82,V13:540,V14:60,V15:15,V17:190,V18:42,V19:18};
+  const hum={MP03:2,MP04:32,MP05:9}; // vinaza NO lleva humedad (va por Brix → V05)
+  for(let i=0;i<=5;i++){
+    const ts=new Date(t0+i*1800000).toISOString();
+    const feed = base.V15*(1+(Math.random()-.5)*.06);
+    Object.keys(base).forEach(v=>{
+      const val = v==='V15' ? feed : base[v]*(1+(Math.random()-.5)*.08);
+      DB.Mediciones.push({id:uid('M'),produccion_id:'PRdemo',timestamp:ts,variable_id:v,mp_id:'',valor:+val.toFixed(2)});
+    });
+    // kg/min real ≈ objetivo (prop × feed) con ruido
+    Object.keys(props).forEach(mp=>{
+      const obj = props[mp]/100*feed*1000/60;
+      DB.Mediciones.push({id:uid('M'),produccion_id:'PRdemo',timestamp:ts,variable_id:'V16',mp_id:mp,valor:+(obj*(1+(Math.random()-.5)*.12)).toFixed(1)});
+    });
+    Object.keys(hum).forEach(mp=>DB.Mediciones.push({id:uid('M'),produccion_id:'PRdemo',timestamp:ts,variable_id:'V03',mp_id:mp,valor:+(hum[mp]*(1+(Math.random()-.5)*.1)).toFixed(1)}));
+  }
+}
+
+/* ------------------------------------------------ navegación */
+function irA(v){
+  vistaActual=v;
+  $$('#nav button').forEach(b=>b.classList.toggle('activa', b.dataset.v===v));
+  $$('main section').forEach(s=>s.hidden = s.id!=='v-'+v);
+  render();
+}
+$('#nav').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b) irA(b.dataset.v); });
+
+function render(){
+  charts.forEach(c=>c.destroy()); charts=[];
+  ({producciones:rProducciones, captura:rCaptura, receta:rReceta, tablero:rTablero, cierre:rCierre, config:rConfig})[vistaActual]();
+}
+
+/* ------------------------------------------------ selector de producción común */
+function selectorProduccion(idSel, soloEnCurso, valor){
+  const lista = soloEnCurso ? produccionesEnCurso() : DB.Producciones.slice().sort((a,b)=>String(b.fecha_inicio).localeCompare(String(a.fecha_inicio)));
+  if(!lista.length) return null;
+  const v = valor && lista.find(p=>p.id===valor) ? valor : lista[0].id;
+  const ops = lista.map(p=>{
+    const pr=prodPorId(p.producto_id);
+    return `<option value="${p.id}" ${p.id===v?'selected':''}>${esc(pr?pr.nombre:'?')} · ${fFecha(p.fecha_inicio)} ${p.estado==='En curso'?'· EN CURSO':''}</option>`;
+  }).join('');
+  return `<div class="campo"><label>Producción</label><select id="${idSel}">${ops}</select></div>`;
+}
+
+/* =====================================================================
+   VISTA: PRODUCCIONES
+===================================================================== */
+function rProducciones(){
+  const s=$('#v-producciones');
+  const lista = DB.Producciones.slice().sort((a,b)=>String(b.fecha_inicio).localeCompare(String(a.fecha_inicio)));
+  const items = lista.map(p=>{
+    const pr=prodPorId(p.producto_id)||{};
+    const chip = p.estado==='En curso' ? '<span class="chip ok">En curso</span>' : '<span class="chip neutro">Cerrada</span>';
+    const tipo = `<span class="chip ${esOM(pr)?'om':'filler'}">${esc(pr.tipo||'')}</span>`;
+    const tomas = medicionesDe(p.id).reduce((set,m)=>set.add(m.timestamp),new Set()).size;
+    const costo = num(p.costo_primo)!=null && p.costo_primo!=='' ? ` · Costo primo ${fQ(num(p.costo_primo))}/TM` : '';
+    return `<div class="item">
+      <div><strong>${esc(pr.nombre||'?')}</strong> ${tipo} ${chip}<br>
+      <span class="muted">Inicio ${fFecha(p.fecha_inicio)} · Operador ${esc(p.operador||'—')} · ${tomas} tomas${costo}</span></div>
+      <div style="display:flex;gap:6px">
+        ${p.estado==='En curso' ? `<button class="btn peq" data-cap="${p.id}">Capturar</button>` : `<button class="btn peq sec" data-tab="${p.id}">Ver tablero</button>`}
+      </div></div>`;
+  }).join('') || '<p class="muted">Sin producciones registradas todavía. Iniciá la primera corrida abajo.</p>';
+
+  const prodsActivos = DB.Productos.filter(p=>String(p.activo).toUpperCase()!=='NO');
+  s.innerHTML = `
+    <h2>Producciones</h2>
+    ${DEMO?'<div class="aviso info">MODO DEMO: la app está corriendo sin conexión a Google Sheets (API_URL vacía). Los datos son de ejemplo y no se guardan.</div>':''}
+    <div class="carta lista-prod">${items}</div>
+    <div class="carta">
+      <h3>Nueva producción</h3>
+      <div class="fila">
+        <div class="campo"><label>Producto</label><select id="np-prod">${prodsActivos.map(p=>`<option value="${p.id}">${esc(p.nombre)} (${esc(p.tipo)})</option>`).join('')}</select></div>
+        <div class="campo"><label>Operador</label><input id="np-op" placeholder="Nombre"></div>
+        <div class="campo"><label>Turno</label><select id="np-turno"><option>A</option><option>B</option><option>C</option></select></div>
+      </div>
+      <div id="np-om"></div>
+      <div style="margin-top:14px"><button class="btn" id="np-crear">Iniciar producción</button></div>
+    </div>`;
+
+  s.querySelectorAll('[data-cap]').forEach(b=>b.onclick=()=>{ lsSet('cap-prod', b.dataset.cap); irA('captura'); });
+  s.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ lsSet('tab-prod', b.dataset.tab); irA('tablero'); });
+  $('#np-prod').onchange = pintarSeccionOM;
+  pintarSeccionOM();
+  $('#np-crear').onclick = crearProduccion;
+}
+
+function pintarSeccionOM(){
+  const p = prodPorId($('#np-prod').value);
+  const cont = $('#np-om');
+  if(!esOM(p)){ cont.innerHTML=''; return; }
+  const mps = mpsDeProducto(p.id);
+  cont.innerHTML = `
+    <h3>Medición inicial y receta de proporciones (v1)</h3>
+    <p class="muted">La receta se define como <strong>proporción (%)</strong> de cada materia prima. Los kg/min objetivo se calculan según la alimentación objetivo (TM/h) y se recalculan en cada toma con el ritmo real.</p>
+    <div class="campo" style="max-width:240px;margin-bottom:10px"><label>Alimentación objetivo <span class="unidad">(TM/h)</span></label><input type="number" step="0.1" min="0" id="np-alim" placeholder="Ej. 15"></div>
+    <table><thead><tr><th>Materia prima</th><th class="num">Medición inicial</th><th class="num">Proporción (%)</th><th class="num">% normalizado</th><th class="num">kg/min objetivo</th></tr></thead>
+    <tbody>${mps.map(m=>{
+      const brix = tipoMedMP(m)==='brix';
+      const dosifica = enReceta(m);
+      return `<tr>
+      <td>${esc(m.nombre)}</td>
+      <td class="num"><input type="number" step="0.1" min="0" class="np-ini" data-mp="${m.id}" data-tipo="${brix?'brix':'humedad'}" placeholder="${brix?'°Bx':'% hum'}" style="max-width:110px;margin-left:auto"></td>
+      ${dosifica
+        ? `<td class="num"><input type="number" step="0.1" min="0" class="np-prop" data-mp="${m.id}" style="max-width:100px;margin-left:auto"></td>
+           <td class="num np-pnorm" data-mp="${m.id}">—</td>
+           <td class="num np-obj" data-mp="${m.id}">—</td>`
+        : `<td class="num muted" colspan="3" style="font-size:12px">no entra en receta</td>`}
+      </tr>`;
+    }).join('')}
+    </tbody></table>
+    <div class="campo" style="margin-top:10px"><label>Nota de receta (opcional)</label><input id="np-nota" placeholder="Ej. compost muy húmedo, se bajó su proporción"></div>`;
+
+  const refrescar = ()=>{
+    const feed = num($('#np-alim').value)||0;
+    const tot = Array.from(cont.querySelectorAll('.np-prop')).reduce((s,x)=>s+(num(x.value)||0),0);
+    cont.querySelectorAll('.np-prop').forEach(inp=>{
+      const mp=inp.dataset.mp, pnorm = tot>0 ? (num(inp.value)||0)/tot*100 : null;
+      cont.querySelector(`.np-pnorm[data-mp="${mp}"]`).textContent = pnorm!=null ? f1(pnorm)+' %' : '—';
+      const obj = objetivoKgMin(pnorm, feed);
+      cont.querySelector(`.np-obj[data-mp="${mp}"]`).textContent = obj!=null ? f1(obj) : '—';
+    });
+  };
+  cont.querySelectorAll('.np-prop').forEach(i=>i.oninput=refrescar);
+  $('#np-alim').oninput=refrescar;
+}
+
+async function crearProduccion(){
+  const btn=$('#np-crear'); btn.disabled=true;
+  try{
+    const p = prodPorId($('#np-prod').value);
+    const ahora = new Date().toISOString();
+    const prId = uid('PR');
+    const filaProd = [prId, p.id, ahora, '', 'En curso', $('#np-op').value||'', $('#np-turno').value, '', '', ''];
+    const recetas=[], mediciones=[];
+    if(esOM(p)){
+      const props = $$('#np-om .np-prop');
+      const feed = num($('#np-alim').value);
+      if(!props.some(i=>num(i.value)>0)){ toast('Ingresá las proporciones de la receta (%).'); btn.disabled=false; return; }
+      props.forEach(i=>{ if(num(i.value)!=null) recetas.push([prId, 1, i.dataset.mp, num(i.value), ahora, $('#np-nota').value||'', feed!=null?feed:'']); });
+      $$('#np-om .np-ini').forEach(i=>{
+        const v=num(i.value); if(v==null) return;
+        if(i.dataset.tipo==='brix') mediciones.push([uid('M'), prId, ahora, 'V05', '', v]);  // Brix vinaza (proceso)
+        else mediciones.push([uid('M'), prId, ahora, 'V03', i.dataset.mp, v]);                // Humedad MP
+      });
+    }
+    await appendFilas('Producciones',[filaProd]);
+    if(recetas.length) await appendFilas('Recetas', recetas);
+    if(mediciones.length) await appendFilas('Mediciones', mediciones);
+    // actualización local
+    DB.Producciones.push({id:prId,producto_id:p.id,fecha_inicio:ahora,fecha_fin:'',estado:'En curso',operador:$('#np-op').value||'',turno:$('#np-turno').value,tm_producidas:'',costo_total:'',costo_primo:''});
+    recetas.forEach(r=>DB.Recetas.push({produccion_id:r[0],version:r[1],mp_id:r[2],proporcion:r[3],timestamp:r[4],nota:r[5],alim_objetivo:r[6]}));
+    mediciones.forEach(m=>DB.Mediciones.push({id:m[0],produccion_id:m[1],timestamp:m[2],variable_id:m[3],mp_id:m[4],valor:m[5]}));
+    toast('Producción iniciada ✓');
+    lsSet('cap-prod', prId);
+    irA('captura');
+  }catch(err){ toast('Error: '+err.message, 4000); }
+  btn.disabled=false;
+}
+/* =====================================================================
+   VISTA: CAPTURA cada 30 minutos
+===================================================================== */
+function rCaptura(){
+  const s=$('#v-captura');
+  const sel = selectorProduccion('cap-sel', true, lsGet('cap-prod',null));
+  if(!sel){ s.innerHTML='<h2>Captura 30\'</h2><div class="aviso info">No hay producciones en curso. Iniciá una desde la pestaña Producciones.</div>'; return; }
+  s.innerHTML = `<h2>Captura 30'</h2><div class="carta"><div class="fila">${sel}
+    <div class="campo" style="max-width:160px"><label>Hora de la toma</label><input type="time" id="cap-hora" value="${new Date().toTimeString().slice(0,5)}"></div>
+  </div></div><div id="cap-form"></div>`;
+  $('#cap-sel').onchange = ()=>{ lsSet('cap-prod', $('#cap-sel').value); pintarFormCaptura(); };
+  pintarFormCaptura();
+}
+
+function pintarFormCaptura(){
+  const prId = $('#cap-sel').value; lsSet('cap-prod', prId);
+  const pr = DB.Producciones.find(p=>p.id===prId);
+  const prod = prodPorId(pr.producto_id);
+  const om = esOM(prod);
+  const vars = varsDeProducto(prod.id);
+  const cont = $('#cap-form');
+
+  const idsFlujo = ['V17','V18','V19'];
+  // En OM la alimentación (V15) se ingresa UNA sola vez, abajo (sección MP). En fillers va en el grid de proceso.
+  const varsProceso = vars.filter(v=>String(v.por_mp).toUpperCase()!=='SI' && !idsFlujo.includes(v.id) && !(om && v.id==='V15'));
+  const varsFlujo = vars.filter(v=>idsFlujo.includes(v.id));
+  const midePorMP = vars.filter(v=>String(v.por_mp).toUpperCase()==='SI');
+  const feedVar = om ? vars.find(v=>v.id==='V15') : null;
+  const mps = mpsReceta(prod.id);                  // solo MPs de receta (vinaza queda fuera)
+  const mpsHum = mps.filter(m=>tipoMedMP(m)==='humedad');
+  const receta = versionVigente(prId);
+  const props = receta ? proporcionesReceta(receta.filas) : {};
+  const feedDefault = receta && receta.alimObjetivo!=null ? receta.alimObjetivo : '';
+  const hayDosis = midePorMP.some(v=>v.id==='V16') && mps.length;
+  const hayHum = midePorMP.some(v=>v.id==='V03') && mpsHum.length;
+
+  // ---- panel de parámetros visibles (persistente por producto) ----
+  const claveVis = 'capt-ocultas-'+prod.id;
+  let ocultas = lsGet(claveVis, []);
+  const toggles = [];
+  varsProceso.forEach(v=>toggles.push({key:v.id, label:v.nombre}));
+  varsFlujo.forEach(v=>toggles.push({key:v.id, label:v.nombre}));
+  if(feedVar) toggles.push({key:'feed', label:'Alimentación (TM/h)'});
+  if(hayHum) toggles.push({key:'hum', label:'Humedad de MP'});
+  if(hayDosis) toggles.push({key:'dosis', label:'Dosificación kg/min'});
+
+  let html = `<details class="panel-params" open><summary>Parámetros a medir en esta toma</summary>
+    <div class="selector-graficos">${toggles.map(t=>`<label class="${ocultas.includes(t.key)?'':'on'}"><input type="checkbox" data-tog="${t.key}" ${ocultas.includes(t.key)?'':'checked'}>${esc(t.label)}</label>`).join('')}</div>
+  </details>`;
+
+  html += `<div class="carta"><h3>Variables de proceso — ${esc(prod.nombre)}</h3>
+    <div class="malla-vars">${varsProceso.map(v=>`
+      <div class="var-card" id="cap-cell-${v.id}"><label>${esc(v.nombre)} <span class="unidad">(${esc(v.unidad)})</span></label>
+      <input type="number" step="any" class="cap-var" data-v="${v.id}"></div>`).join('')}
+    </div></div>`;
+
+  if(varsFlujo.length){
+    html += `<div class="carta"><h3>Flujos de salida (kg/min → %)</h3>
+      <div class="malla-vars">${varsFlujo.map(v=>`
+        <div class="var-card" id="cap-cell-${v.id}"><label>${esc(v.nombre)} <span class="unidad">(kg/min)</span></label>
+        <input type="number" step="any" class="cap-var cap-flujo" data-v="${v.id}"></div>`).join('')}
+      </div>
+      <div class="barra-flujo" id="cap-barra"><div class="bf-pt" style="width:34%">PT</div><div class="bf-fi" style="width:33%">Finos</div><div class="bf-gr" style="width:33%">Gruesos</div></div>
+      <div class="leyenda"><span><i style="background:var(--verde)"></i>Producto terminado</span><span><i style="background:var(--ambar)"></i>Finos</span><span><i style="background:#8C6A4F"></i>Gruesos</span><span class="mono" id="cap-efic"></span></div>
+    </div>`;
+  }
+
+  if(hayHum || hayDosis){
+    html += `<div class="carta"><h3>Materias primas ${receta?`<span class="chip neutro mono">receta v${receta.version}</span>`:''}</h3>
+      ${hayDosis && !receta ? '<div class="aviso err">Esta producción no tiene receta registrada: no se pueden calcular objetivos. Registrala en la pestaña Receta.</div>' : ''}
+      ${feedVar ? `<div class="campo" id="cap-alim-wrap" style="max-width:240px;margin-bottom:10px"><label>Alimentación actual <span class="unidad">(TM/h)</span></label><input type="number" step="0.1" min="0" id="cap-alim" class="cap-var" data-v="V15" value="${feedDefault}"></div>
+      <p class="muted" style="margin-top:-4px">El kg/min objetivo de cada MP se recalcula con este ritmo. Objetivo = proporción × TM/h × 1000 / 60.</p>` : ''}
+      <table><thead><tr><th>MP</th>
+        ${hayHum?'<th class="num" data-col="hum">Humedad %</th>':''}
+        ${hayDosis?'<th class="num" data-col="dosis">% receta</th><th class="num" data-col="dosis">kg/min objetivo</th><th class="num" data-col="dosis">kg/min real</th><th data-col="dosis">Desv.</th>':''}
+      </tr></thead><tbody>
+      ${mps.map(m=>`<tr>
+        <td>${esc(m.nombre)}</td>
+        ${hayHum?`<td class="num" data-col="hum"><input type="number" step="0.1" class="cap-mp" data-v="V03" data-mp="${m.id}" style="max-width:100px;margin-left:auto"></td>`:''}
+        ${hayDosis?`
+          <td class="num" data-col="dosis">${props[m.id]!=null?f1(props[m.id])+' %':'—'}</td>
+          <td class="num cap-obj" data-col="dosis" data-mp="${m.id}">—</td>
+          <td class="num" data-col="dosis"><input type="number" step="0.1" class="cap-mp cap-dosis" data-v="V16" data-mp="${m.id}" style="max-width:100px;margin-left:auto"></td>
+          <td data-col="dosis"><span class="semaforo" data-sem="${m.id}">—</span></td>`:''}
+      </tr>`).join('')}
+      </tbody></table></div>`;
+  }
+
+  html += `<button class="btn" id="cap-guardar">Guardar toma</button>
+    <p class="muted" style="margin-top:8px">Solo se guardan los campos visibles con valor.</p>`;
+  cont.innerHTML = html;
+
+  // ---- visibilidad: ocultar/mostrar sin recargar (no se pierde lo tecleado) ----
+  const objetivosToggle = key => {
+    if(key==='hum') return Array.from(cont.querySelectorAll('[data-col="hum"]'));
+    if(key==='dosis') return Array.from(cont.querySelectorAll('[data-col="dosis"]'));
+    if(key==='feed'){ const w=cont.querySelector('#cap-alim-wrap'); return w?[w]:[]; }
+    const c=cont.querySelector('#cap-cell-'+key); return c?[c]:[];
+  };
+  const aplicar = key => { const oc=ocultas.includes(key); objetivosToggle(key).forEach(el=>el.classList.toggle('oculto', oc)); };
+  toggles.forEach(t=>aplicar(t.key));
+  cont.querySelectorAll('[data-tog]').forEach(chk=>chk.onchange=()=>{
+    const key=chk.dataset.tog;
+    if(chk.checked) ocultas=ocultas.filter(k=>k!==key); else if(!ocultas.includes(key)) ocultas.push(key);
+    lsSet(claveVis, ocultas);
+    chk.closest('label').classList.toggle('on', chk.checked);
+    aplicar(key);
+  });
+
+  const actualizarFlujos = ()=>{
+    const vals = idsFlujo.map(id=>{ const i=cont.querySelector(`.cap-flujo[data-v="${id}"]`); return i?num(i.value)||0:0; });
+    const tot = vals.reduce((a,b)=>a+b,0);
+    const pct = vals.map(v=> tot>0 ? v/tot*100 : 33.3);
+    const barra = $('#cap-barra');
+    if(barra){
+      const segs = barra.children;
+      ['PT','Finos','Gruesos'].forEach((n,i)=>{ segs[i].style.width=Math.max(pct[i],0)+'%'; segs[i].textContent = tot>0?`${n} ${f1(pct[i])}%`:n; });
+      $('#cap-efic').textContent = tot>0 ? `Total ${f1(tot)} kg/min · reproceso ${f1(pct[1]+pct[2])}%` : '';
+    }
+  };
+  cont.querySelectorAll('.cap-flujo').forEach(i=>i.oninput=actualizarFlujos);
+
+  const actualizarSemaforos = ()=>{
+    const feedInput = cont.querySelector('#cap-alim');
+    const feed = feedInput ? num(feedInput.value) : (receta?receta.alimObjetivo:null);
+    cont.querySelectorAll('.cap-dosis').forEach(i=>{
+      const mp=i.dataset.mp;
+      const obj = objetivoKgMin(props[mp], feed);
+      const celdaObj = cont.querySelector(`.cap-obj[data-mp="${mp}"]`);
+      if(celdaObj) celdaObj.textContent = obj!=null ? f1(obj) : '—';
+      const real = num(i.value), sem=cont.querySelector(`[data-sem="${mp}"]`);
+      if(sem){
+        if(real==null || obj==null || obj===0){ sem.textContent='—'; sem.style.background='';sem.style.color=''; return; }
+        const desv = (real-obj)/obj*100, abs=Math.abs(desv);
+        const cls = abs<=5?['var(--okbg)','var(--ok)'] : abs<=10?['var(--warnbg)','var(--warn)'] : ['var(--malbg)','var(--mal)'];
+        sem.textContent=(desv>0?'+':'')+f1(desv)+'%';
+        sem.style.background=cls[0]; sem.style.color=cls[1];
+      }
+    });
+  };
+  cont.querySelectorAll('.cap-dosis').forEach(i=>i.oninput=actualizarSemaforos);
+  const alimInput = cont.querySelector('#cap-alim'); if(alimInput) alimInput.oninput=actualizarSemaforos;
+  actualizarSemaforos();
+
+  $('#cap-guardar').onclick = async ()=>{
+    const btn=$('#cap-guardar'); btn.disabled=true;
+    try{
+      const hora = $('#cap-hora').value;
+      const d = new Date(); if(hora){ const [h,m]=hora.split(':'); d.setHours(+h,+m,0,0); }
+      const ts = d.toISOString();
+      const filas=[];
+      // offsetParent===null → el campo está oculto (parámetro no medido en esta toma): se omite
+      cont.querySelectorAll('.cap-var').forEach(i=>{ if(i.offsetParent===null) return; const v=num(i.value); if(v!=null) filas.push([uid('M'), prId, ts, i.dataset.v, '', v]); });
+      cont.querySelectorAll('.cap-mp').forEach(i=>{ if(i.offsetParent===null) return; const v=num(i.value); if(v!=null) filas.push([uid('M'), prId, ts, i.dataset.v, i.dataset.mp, v]); });
+      if(!filas.length){ toast('No hay valores que guardar.'); btn.disabled=false; return; }
+      await appendFilas('Mediciones', filas);
+      filas.forEach(f=>DB.Mediciones.push({id:f[0],produccion_id:f[1],timestamp:f[2],variable_id:f[3],mp_id:f[4],valor:f[5]}));
+      toast(`Toma guardada ✓ (${filas.length} valores, ${fHora(ts)})`);
+      pintarFormCaptura();
+    }catch(err){ toast('Error: '+err.message, 4000); }
+    btn.disabled=false;
+  };
+}
+
+/* =====================================================================
+   VISTA: RECETA (versionada)
+===================================================================== */
+function rReceta(){
+  const s=$('#v-receta');
+  const enCurso = produccionesEnCurso().filter(p=>esOM(prodPorId(p.producto_id)));
+  if(!enCurso.length){ s.innerHTML='<h2>Receta</h2><div class="aviso info">No hay producciones OM en curso. Las recetas se definen al iniciar una producción OM y pueden modificarse aquí durante la corrida.</div>'; return; }
+  const sel = `<div class="campo"><label>Producción OM en curso</label><select id="rec-sel">${enCurso.map(p=>`<option value="${p.id}">${esc(prodPorId(p.producto_id).nombre)} · ${fFecha(p.fecha_inicio)}</option>`).join('')}</select></div>`;
+  s.innerHTML = `<h2>Receta de dosificación</h2><div class="carta"><div class="fila">${sel}</div></div><div id="rec-cuerpo"></div>`;
+  $('#rec-sel').onchange = pintarReceta;
+  pintarReceta();
+}
+
+function pintarReceta(){
+  const prId = $('#rec-sel').value;
+  const pr = DB.Producciones.find(p=>p.id===prId);
+  const mps = mpsReceta(pr.producto_id);  // vinaza no entra en la receta
+  const vig = versionVigente(prId);
+  const props = vig ? proporcionesReceta(vig.filas) : {};
+  const versiones = Array.from(new Set(recetasDe(prId).map(r=>num(r.version)||1))).sort((a,b)=>a-b);
+
+  const hist = versiones.map(v=>{
+    const filas = recetasDe(prId).filter(r=>(num(r.version)||1)===v);
+    const pv = proporcionesReceta(filas);
+    const feed = num(filas[0].alim_objetivo);
+    return `<tr><td class="mono">v${v}${vig&&v===vig.version?' <span class="chip ok">vigente</span>':''}</td>
+      <td>${fFecha(filas[0].timestamp)}</td>
+      <td>${feed!=null?f1(feed)+' TM/h':'—'}</td>
+      <td>${filas.map(f=>`${esc((mpPorId(f.mp_id)||{}).nombre||f.mp_id)} ${f1(pv[f.mp_id])}%`).join(' · ')}</td>
+      <td class="muted">${esc(filas[0].nota||'')}</td></tr>`;
+  }).join('');
+
+  $('#rec-cuerpo').innerHTML = `
+    <div class="carta"><h3>Historial de versiones</h3>
+      <div style="overflow-x:auto"><table><thead><tr><th>Versión</th><th>Desde</th><th>Alim. obj.</th><th>Proporciones</th><th>Nota</th></tr></thead><tbody>${hist||'<tr><td colspan="5" class="muted">Sin receta registrada.</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="carta"><h3>Nueva versión (cambio de receta)</h3>
+      <p class="muted">Crear una versión nueva no borra la anterior: cada medición se valida contra la receta vigente en su momento.</p>
+      <div class="campo" style="max-width:240px;margin-bottom:10px"><label>Alimentación objetivo <span class="unidad">(TM/h)</span></label><input type="number" step="0.1" min="0" id="rec-alim" value="${vig&&vig.alimObjetivo!=null?vig.alimObjetivo:''}"></div>
+      <table><thead><tr><th>MP</th><th class="num">Proporción (%)</th><th class="num">% normalizado</th><th class="num">kg/min objetivo</th></tr></thead><tbody>
+        ${mps.map(m=>`<tr><td>${esc(m.nombre)}</td>
+          <td class="num"><input type="number" step="0.1" min="0" class="rec-prop-in" data-mp="${m.id}" value="${vig&&vig.filas.find(f=>f.mp_id===m.id)?num(vig.filas.find(f=>f.mp_id===m.id).proporcion):''}" style="max-width:110px;margin-left:auto"></td>
+          <td class="num rec-pnorm" data-mp="${m.id}">${props[m.id]!=null?f1(props[m.id])+' %':'—'}</td>
+          <td class="num rec-obj" data-mp="${m.id}">—</td></tr>`).join('')}
+      </tbody></table>
+      <div class="campo" style="margin-top:10px"><label>Motivo del cambio</label><input id="rec-nota" placeholder="Ej. compost llegó con 38% de humedad"></div>
+      <div style="margin-top:12px"><button class="btn" id="rec-guardar">Guardar versión ${vig?vig.version+1:1}</button></div>
+    </div>`;
+
+  const refrescar = ()=>{
+    const feed = num($('#rec-alim').value)||0;
+    const tot = $$('#rec-cuerpo .rec-prop-in').reduce((s,i)=>s+(num(i.value)||0),0);
+    $$('#rec-cuerpo .rec-prop-in').forEach(i=>{
+      const mp=i.dataset.mp, pnorm = tot>0?(num(i.value)||0)/tot*100:null;
+      document.querySelector(`#rec-cuerpo .rec-pnorm[data-mp="${mp}"]`).textContent = pnorm!=null?f1(pnorm)+' %':'—';
+      const obj = objetivoKgMin(pnorm, feed);
+      document.querySelector(`#rec-cuerpo .rec-obj[data-mp="${mp}"]`).textContent = obj!=null?f1(obj):'—';
+    });
+  };
+  $$('#rec-cuerpo .rec-prop-in').forEach(i=>i.oninput=refrescar);
+  $('#rec-alim').oninput=refrescar;
+  refrescar();
+
+  $('#rec-guardar').onclick = async ()=>{
+    const btn=$('#rec-guardar'); btn.disabled=true;
+    try{
+      const ts=new Date().toISOString(), ver=vig?vig.version+1:1, feed=num($('#rec-alim').value);
+      const filas = $$('#rec-cuerpo .rec-prop-in').filter(i=>num(i.value)!=null).map(i=>[prId, ver, i.dataset.mp, num(i.value), ts, $('#rec-nota').value||'', feed!=null?feed:'']);
+      if(!filas.length){ toast('Ingresá al menos una proporción.'); btn.disabled=false; return; }
+      await appendFilas('Recetas', filas);
+      filas.forEach(f=>DB.Recetas.push({produccion_id:f[0],version:f[1],mp_id:f[2],proporcion:f[3],timestamp:f[4],nota:f[5],alim_objetivo:f[6]}));
+      toast('Receta v'+ver+' guardada ✓');
+      pintarReceta();
+    }catch(err){ toast('Error: '+err.message,4000); }
+    btn.disabled=false;
+  };
+}
+
+/* =====================================================================
+   VISTA: CIERRE — consumos totales y costo primo
+===================================================================== */
+function rCierre(){
+  const s=$('#v-cierre');
+  const sel = selectorProduccion('cie-sel', true, lsGet('cap-prod',null));
+  if(!sel){ s.innerHTML='<h2>Cierre</h2><div class="aviso info">No hay producciones en curso para cerrar.</div>'; return; }
+  s.innerHTML = `<h2>Cierre de producción</h2><div class="carta"><div class="fila">${sel}</div></div><div id="cie-cuerpo"></div>`;
+  $('#cie-sel').onchange = pintarCierre;
+  pintarCierre();
+}
+
+function pintarCierre(){
+  const prId=$('#cie-sel').value;
+  const pr=DB.Producciones.find(p=>p.id===prId);
+  const prod=prodPorId(pr.producto_id);
+  const mps=mpsDeProducto(prod.id);
+
+  $('#cie-cuerpo').innerHTML = `
+    <div class="carta">
+      <h3>Consumos totales — ${esc(prod.nombre)}</h3>
+      <p class="muted">Ingresá las cantidades totales consumidas en la corrida. El precio se precarga desde la configuración y puede ajustarse. Agregá insumos adicionales (combustible, energía, sacos…) con el botón.</p>
+      <div style="overflow-x:auto"><table id="cie-tabla"><thead><tr><th>Insumo</th><th class="num">Cantidad</th><th>Unidad</th><th class="num">Precio unit. (Q)</th><th class="num">Costo</th><th></th></tr></thead><tbody>
+      ${mps.map(m=>filaConsumo(m.nombre, m.unidad, num(m.precio)||0)).join('')}
+      </tbody></table></div>
+      <div style="margin-top:10px"><button class="btn sec peq" id="cie-agregar">+ Agregar insumo</button></div>
+    </div>
+    <div class="carta">
+      <h3>Resultado</h3>
+      <div class="fila">
+        <div class="campo" style="max-width:200px"><label>TM producidas</label><input type="number" step="0.01" min="0" id="cie-tm"></div>
+        <div class="campo"><label>Costo total</label><div class="mono" id="cie-total" style="font-size:20px;font-weight:700;padding:8px 0">Q 0.00</div></div>
+        <div class="campo"><label>Costo primo (Q/TM)</label><div class="mono" id="cie-primo" style="font-size:20px;font-weight:700;padding:8px 0;color:var(--verde)">—</div></div>
+      </div>
+      <div style="margin-top:12px"><button class="btn" id="cie-cerrar">Cerrar producción</button></div>
+      <p class="muted" style="margin-top:8px">Al cerrar, la producción queda bloqueada para captura y los consumos se guardan en la hoja.</p>
+    </div>`;
+
+  const recalc = ()=>{
+    let total=0;
+    $$('#cie-tabla tbody tr').forEach(tr=>{
+      const c=num(tr.querySelector('.cie-cant').value)||0, p=num(tr.querySelector('.cie-precio').value)||0;
+      const costo=c*p; total+=costo;
+      tr.querySelector('.cie-costo').textContent=fQ(costo);
+    });
+    $('#cie-total').textContent=fQ(total);
+    const tm=num($('#cie-tm').value);
+    $('#cie-primo').textContent = tm>0 ? fQ(total/tm) : '—';
+  };
+  const enganchar = tr=>{ tr.querySelectorAll('input').forEach(i=>i.oninput=recalc); const x=tr.querySelector('.cie-x'); if(x) x.onclick=()=>{ tr.remove(); recalc(); }; };
+  $$('#cie-tabla tbody tr').forEach(enganchar);
+  $('#cie-tm').oninput=recalc;
+  $('#cie-agregar').onclick=()=>{
+    const tb=$('#cie-tabla tbody'); const tr=document.createElement('tr');
+    tr.innerHTML=filaConsumo('', 'gal', 0, true).replace(/^<tr>|<\/tr>$/g,'');
+    tb.appendChild(tr); enganchar(tr);
+  };
+
+  $('#cie-cerrar').onclick = async ()=>{
+    const btn=$('#cie-cerrar'); btn.disabled=true;
+    try{
+      const tm=num($('#cie-tm').value);
+      if(tm==null||tm<=0){ toast('Ingresá las TM producidas.'); btn.disabled=false; return; }
+      const filas=[]; let total=0;
+      $$('#cie-tabla tbody tr').forEach(tr=>{
+        const nombre = tr.querySelector('.cie-nombre') ? tr.querySelector('.cie-nombre').value : tr.querySelector('td').textContent;
+        const c=num(tr.querySelector('.cie-cant').value), p=num(tr.querySelector('.cie-precio').value)||0;
+        const u=tr.querySelector('.cie-uni') ? tr.querySelector('.cie-uni').value : tr.children[2].textContent;
+        if(c!=null && c>0 && nombre){ const costo=c*p; total+=costo; filas.push([prId, nombre, c, u, p, costo]); }
+      });
+      if(!filas.length){ toast('Ingresá al menos un consumo.'); btn.disabled=false; return; }
+      const primo = total/tm, fin = new Date().toISOString();
+      await appendFilas('Consumos', filas);
+      await apiPost({accion:'actualizarProduccion', id:prId, campos:{fecha_fin:fin, estado:'Cerrada', tm_producidas:tm, costo_total:+total.toFixed(2), costo_primo:+primo.toFixed(2)}});
+      filas.forEach(f=>DB.Consumos.push({produccion_id:f[0],insumo:f[1],cantidad:f[2],unidad:f[3],precio_unit:f[4],costo:f[5]}));
+      Object.assign(pr,{fecha_fin:fin,estado:'Cerrada',tm_producidas:tm,costo_total:+total.toFixed(2),costo_primo:+primo.toFixed(2)});
+      toast(`Producción cerrada ✓ · Costo primo ${fQ(primo)}/TM`, 4000);
+      irA('producciones');
+    }catch(err){ toast('Error: '+err.message,4000); }
+    btn.disabled=false;
+  };
+}
+
+function filaConsumo(nombre, unidad, precio, editable){
+  return `<tr>
+    <td>${editable?`<input class="cie-nombre" placeholder="Ej. Diésel, Energía, Sacos">`:esc(nombre)}</td>
+    <td class="num"><input type="number" step="any" min="0" class="cie-cant" style="max-width:110px;margin-left:auto"></td>
+    <td>${editable?`<input class="cie-uni" value="${esc(unidad)}" style="max-width:70px">`:esc(unidad)}</td>
+    <td class="num"><input type="number" step="any" min="0" class="cie-precio" value="${precio||''}" style="max-width:110px;margin-left:auto"></td>
+    <td class="num cie-costo">Q 0.00</td>
+    <td>${editable?'<button class="btn sec peq cie-x">✕</button>':''}</td>
+  </tr>`;
+}
+/* =====================================================================
+   VISTA: TABLERO
+===================================================================== */
+const PALETA = ['#1E5641','#D9822B','#33546E','#8C6A4F','#C0392B','#5E7D2E','#7A4E8C','#B97A12','#2E7D8C','#A03E6B'];
+
+function rTablero(){
+  const s=$('#v-tablero');
+  const sel = selectorProduccion('tab-sel', false, lsGet('tab-prod', lsGet('cap-prod', null)));
+  if(!sel){ s.innerHTML='<h2>Tablero</h2><div class="aviso info">Todavía no hay producciones con datos.</div>'; return; }
+  s.innerHTML = `<h2>Tablero</h2><div class="carta"><div class="fila">${sel}</div>
+    <div id="tab-selector" class="selector-graficos"></div></div>
+    <div id="tab-graficos" class="grid-graficos"></div>`;
+  $('#tab-sel').onchange = ()=>{ lsSet('tab-prod', $('#tab-sel').value); pintarTablero(); };
+  pintarTablero();
+}
+
+function pintarTablero(){
+  charts.forEach(c=>c.destroy()); charts=[];
+  const prId=$('#tab-sel').value;
+  const pr=DB.Producciones.find(p=>p.id===prId);
+  const prod=prodPorId(pr.producto_id);
+  const vars=varsDeProducto(prod.id);
+  const meds=medicionesDe(prId);
+  const om = vars.some(v=>v.id==='V16');
+
+  // opciones de gráficos disponibles
+  const ops=[];
+  if(vars.some(v=>['V17','V18','V19'].includes(v.id))) ops.push({id:'_flujos', nombre:'Distribución de flujos (%)'});
+  if(om) ops.push({id:'_receta', nombre:'Cumplimiento de receta'});
+  if(vars.some(v=>v.id==='V03')) ops.push({id:'_hum_mp', nombre:'Humedad materias primas'});
+  ops.push({id:'_humedades', nombre:'Humedades de proceso'});
+  ops.push({id:'_temps', nombre:'Temperaturas del horno'});
+  vars.filter(v=>String(v.por_mp).toUpperCase()!=='SI' && !['V01','V02','V10','V12','V13','V17','V18','V19'].includes(v.id))
+      .forEach(v=>ops.push({id:v.id, nombre:v.nombre}));
+
+  const clave='graficos-'+prod.id;
+  let activos = lsGet(clave, ['_flujos', om?'_receta':'_humedades', '_humedades', '_temps'].filter((x,i,a)=>a.indexOf(x)===i));
+  const cont=$('#tab-selector');
+  cont.innerHTML = ops.map(o=>`<label class="${activos.includes(o.id)?'on':''}"><input type="checkbox" value="${o.id}" ${activos.includes(o.id)?'checked':''}>${esc(o.nombre)}</label>`).join('');
+  cont.querySelectorAll('input').forEach(i=>i.onchange=()=>{
+    activos = Array.from(cont.querySelectorAll('input:checked')).map(x=>x.value);
+    lsSet(clave, activos);
+    cont.querySelectorAll('label').forEach(l=>l.classList.toggle('on', l.querySelector('input').checked));
+    dibujarGraficos();
+  });
+
+  const tss = Array.from(new Set(meds.map(m=>m.timestamp))).sort();
+  const serie = (vid, mpid) => tss.map(t=>{
+    const m = meds.find(x=>x.timestamp===t && x.variable_id===vid && (mpid?x.mp_id===mpid:true));
+    return m?num(m.valor):null;
+  });
+  const etiquetas = tss.map(fHora);
+
+  function dibujarGraficos(){
+    charts.forEach(c=>c.destroy()); charts=[];
+    const zona=$('#tab-graficos');
+    if(!tss.length){ zona.innerHTML='<div class="aviso info">Esta producción todavía no tiene tomas registradas.</div>'; return; }
+    zona.innerHTML = activos.map(id=>`<div class="graf"><h4>${esc((ops.find(o=>o.id===id)||{}).nombre||id)}</h4><div class="lienzo"><canvas id="g-${id}"></canvas></div></div>`).join('')
+      || '<div class="aviso info">Seleccioná arriba los gráficos que querés seguir.</div>';
+
+    const FAM = "'Archivo', system-ui, sans-serif";
+    const TINTA='#22302B', TINTA2='#64716A', GRID='rgba(34,48,43,.07)', LINEA='#E0DED4';
+    const base = {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      layout:{padding:{top:4,right:8,bottom:0,left:0}},
+      elements:{ line:{borderWidth:2.5, tension:.35}, point:{radius:0, hoverRadius:5, hitRadius:14, borderWidth:2, backgroundColor:'#fff'} },
+      plugins:{
+        legend:{ position:'top', align:'start',
+          labels:{ usePointStyle:true, pointStyle:'circle', boxWidth:8, boxHeight:8, padding:14, color:TINTA2, font:{family:FAM, size:11.5, weight:'600'} } },
+        tooltip:{ backgroundColor:'#fff', titleColor:TINTA, bodyColor:TINTA, borderColor:LINEA, borderWidth:1,
+          padding:10, cornerRadius:8, titleFont:{family:FAM, size:12, weight:'700'}, bodyFont:{family:FAM, size:12},
+          boxPadding:5, usePointStyle:true, displayColors:true,
+          callbacks:{ label:c=>` ${c.dataset.label}: ${c.parsed.y==null?'—':c.parsed.y.toLocaleString('es-GT',{maximumFractionDigits:2})}` } }
+      },
+      scales:{
+        x:{ grid:{display:false}, border:{color:LINEA}, ticks:{color:TINTA2, font:{family:FAM, size:10.5}, maxRotation:0, autoSkipPadding:14} },
+        y:{ grid:{color:GRID, drawTicks:false}, border:{display:false}, ticks:{color:TINTA2, font:{family:FAM, size:10.5}, padding:6} }
+      }
+    };
+    const ejeY = (titulo)=> titulo ? {title:{display:true, text:titulo, color:TINTA2, font:{family:FAM, size:11, weight:'600'}}} : {};
+    const linea = (ds, tituloY)=>({ type:'line', data:{labels:etiquetas, datasets:ds},
+      options:Object.assign({}, base, {scales:{ x:base.scales.x, y:Object.assign({}, base.scales.y, ejeY(tituloY)) }}) });
+    const set = (n,datos,i,extra)=>Object.assign({
+      label:n, data:datos, borderColor:PALETA[i%PALETA.length], pointBackgroundColor:'#fff',
+      pointBorderColor:PALETA[i%PALETA.length], backgroundColor:PALETA[i%PALETA.length]+'1A',
+      spanGaps:true, fill:false }, extra||{});
+
+    activos.forEach(id=>{
+      const cv=document.getElementById('g-'+id); if(!cv) return;
+      let cfg=null;
+
+      if(id==='_flujos'){
+        const pt=serie('V17'), fi=serie('V18'), gr=serie('V19');
+        const pct = arr => tss.map((t,i)=>{ const tot=(pt[i]||0)+(fi[i]||0)+(gr[i]||0); return tot>0?(arr[i]||0)/tot*100:null; });
+        cfg=linea([
+          set('Producto terminado', pct(pt), 0),
+          set('Finos', pct(fi), 1),
+          set('Gruesos', pct(gr), 3)
+        ], 'Distribución (%)');
+        cfg.options.scales.y.suggestedMin=0; cfg.options.scales.y.suggestedMax=100;
+      }
+      else if(id==='_receta'){
+        const mps=mpsReceta(prod.id).filter(m=>meds.some(x=>x.variable_id==='V16'&&x.mp_id===m.id));
+        const ds = mps.map((m,i)=>{
+          const datos = tss.map(t=>{
+            const x=meds.find(z=>z.timestamp===t&&z.variable_id==='V16'&&z.mp_id===m.id);
+            if(!x) return null;
+            const vig=versionVigente(prId, t); if(!vig) return null;
+            const props=proporcionesReceta(vig.filas);
+            if(props[m.id]==null) return null;
+            // ritmo de alimentación de esa toma; si falta, usar el objetivo de la receta vigente
+            const fm=meds.find(z=>z.timestamp===t&&z.variable_id==='V15');
+            const feed = fm!=null ? num(fm.valor) : vig.alimObjetivo;
+            const obj = objetivoKgMin(props[m.id], feed);
+            if(obj==null||obj===0) return null;
+            return ((num(x.valor)||0) - obj) / obj * 100; // desviación vs objetivo
+          });
+          return set(m.nombre, datos, i);
+        });
+        cfg=linea(ds, 'Desviación vs objetivo (%)');
+      }
+      else if(id==='_hum_mp'){
+        const mps=mpsDeProducto(prod.id).filter(m=>meds.some(x=>x.variable_id==='V03'&&x.mp_id===m.id));
+        cfg=linea(mps.map((m,i)=>set(m.nombre, serie('V03',m.id), i)), 'Humedad (%)');
+      }
+      else if(id==='_humedades'){
+        cfg=linea([set('Salida de plato',serie('V01'),0), set('Producto terminado',serie('V02'),1)], 'Humedad (%)');
+      }
+      else if(id==='_temps'){
+        cfg=linea([set('Entrada horno',serie('V13'),4), set('Salida horno',serie('V12'),1), set('Producto terminado',serie('V10'),0)], 'Temperatura (°C)');
+      }
+      else {
+        const v=varPorId(id);
+        cfg=linea([set(v.nombre, serie(id), 0)], v.unidad);
+      }
+      charts.push(new Chart(cv, cfg));
+    });
+  }
+  dibujarGraficos();
+}
+
+/* =====================================================================
+   VISTA: CONFIG
+===================================================================== */
+let cfgTab = 'productos';
+function rConfig(){
+  const s=$('#v-config');
+  s.innerHTML = `<h2>Configuración</h2>
+    <div class="tab-config">
+      <button data-t="productos">Productos</button><button data-t="variables">Variables</button>
+      <button data-t="matrizpv">Variables por producto</button><button data-t="mps">Materias primas</button>
+      <button data-t="matrizpm">MPs por producto</button>
+    </div><div id="cfg-cuerpo"></div>`;
+  s.querySelectorAll('.tab-config button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.t===cfgTab);
+    b.onclick=()=>{ cfgTab=b.dataset.t; rConfig(); };
+  });
+  ({productos:cfgProductos, variables:cfgVariables, matrizpv:cfgMatrizPV, mps:cfgMPs, matrizpm:cfgMatrizPM})[cfgTab]();
+}
+
+function tablaEditable(cont, columnas, filas, idPrefijo){
+  cont.innerHTML = `<div class="carta"><div style="overflow-x:auto"><table><thead><tr>${columnas.map(c=>`<th>${esc(c.titulo)}</th>`).join('')}<th></th></tr></thead>
+    <tbody id="cfg-tb">${filas.map(f=>filaEditable(columnas,f)).join('')}</tbody></table></div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn sec peq" id="cfg-mas">+ Agregar fila</button>
+      <button class="btn peq" id="cfg-guardar">Guardar cambios</button>
+    </div>
+    <p class="muted" style="margin-top:8px">Los ID se generan automáticamente para filas nuevas. Para retirar un elemento sin perder historial, marcalo como activo = NO en lugar de borrarlo.</p></div>`;
+  $('#cfg-mas').onclick=()=>{
+    const f={}; columnas.forEach(c=>f[c.campo]=c.def!==undefined?c.def:'');
+    f[columnas[0].campo]=uid(idPrefijo);
+    const tr=document.createElement('tr'); tr.innerHTML=filaEditable(columnas,f).replace(/^<tr>|<\/tr>$/g,'');
+    tr.querySelector('.cfg-x').onclick=()=>tr.remove();
+    $('#cfg-tb').appendChild(tr);
+  };
+  $('#cfg-tb').querySelectorAll('.cfg-x').forEach(x=>x.onclick=()=>x.closest('tr').remove());
+  return columnas;
+}
+function filaEditable(columnas, f){
+  return `<tr>${columnas.map((c,i)=>{
+    const v=f[c.campo];
+    if(i===0) return `<td class="mono" data-id="${esc(v)}">${esc(v)}</td>`;
+    if(c.tipo==='sel') return `<td><select class="cfg-c" data-c="${c.campo}">${c.ops.map(o=>`<option ${String(v)===o?'selected':''}>${o}</option>`).join('')}</select></td>`;
+    return `<td><input class="cfg-c" data-c="${c.campo}" value="${esc(v)}" ${c.tipo==='num'?'type="number" step="any"':''}></td>`;
+  }).join('')}<td><button class="btn sec peq cfg-x">✕</button></td></tr>`;
+}
+function leerTabla(columnas){
+  return $$('#cfg-tb tr').map(tr=>{
+    const fila=[tr.querySelector('[data-id]').dataset.id];
+    columnas.slice(1).forEach(c=>{ fila.push(tr.querySelector(`[data-c="${c.campo}"]`).value); });
+    return fila;
+  });
+}
+async function guardarConfig(hoja, filas, recargar){
+  try{
+    await apiPost({accion:'reemplazarHoja', hoja, filas});
+    toast('Configuración guardada ✓');
+    if(!DEMO){ await apiGet(); } else if(recargar){ recargar(filas); }
+    render();
+  }catch(err){ toast('Error: '+err.message,4000); }
+}
+
+function cfgProductos(){
+  const cols=[{campo:'id',titulo:'ID'},{campo:'nombre',titulo:'Nombre'},{campo:'tipo',titulo:'Tipo',tipo:'sel',ops:['Filler','OM'],def:'Filler'},{campo:'activo',titulo:'Activo',tipo:'sel',ops:['SI','NO'],def:'SI'}];
+  tablaEditable($('#cfg-cuerpo'), cols, DB.Productos, 'P');
+  $('#cfg-guardar').onclick=()=>{ const filas=leerTabla(cols); guardarConfig('Productos', filas, fs=>{ DB.Productos=fs.map(f=>({id:f[0],nombre:f[1],tipo:f[2],activo:f[3]})); }); };
+}
+function cfgVariables(){
+  const cols=[{campo:'id',titulo:'ID'},{campo:'nombre',titulo:'Nombre'},{campo:'unidad',titulo:'Unidad'},{campo:'momento',titulo:'Momento',tipo:'sel',ops:['30min','inicio','cierre'],def:'30min'},{campo:'por_mp',titulo:'Por MP',tipo:'sel',ops:['NO','SI'],def:'NO'},{campo:'orden',titulo:'Orden',tipo:'num',def:99}];
+  tablaEditable($('#cfg-cuerpo'), cols, DB.Variables, 'V');
+  $('#cfg-guardar').onclick=()=>{ const filas=leerTabla(cols); guardarConfig('Variables', filas, fs=>{ DB.Variables=fs.map(f=>({id:f[0],nombre:f[1],unidad:f[2],momento:f[3],por_mp:f[4],orden:f[5]})); }); };
+}
+function cfgMPs(){
+  const cols=[{campo:'id',titulo:'ID'},{campo:'nombre',titulo:'Nombre'},{campo:'unidad',titulo:'Unidad',def:'TM'},{campo:'precio',titulo:'Precio (Q)',tipo:'num',def:0},{campo:'tipo_medicion',titulo:'Medición inicial',tipo:'sel',ops:['humedad','brix'],def:'humedad'},{campo:'activo',titulo:'Activo',tipo:'sel',ops:['SI','NO'],def:'SI'}];
+  tablaEditable($('#cfg-cuerpo'), cols, DB.MateriasPrimas, 'MP');
+  $('#cfg-guardar').onclick=()=>{ const filas=leerTabla(cols); guardarConfig('MateriasPrimas', filas, fs=>{ DB.MateriasPrimas=fs.map(f=>({id:f[0],nombre:f[1],unidad:f[2],precio:f[3],tipo_medicion:f[4],activo:f[5]})); }); };
+}
+function matrizChecks(cont, filasItems, colsItems, relacion, claveFila, claveCol, hoja, setLocal){
+  cont.innerHTML = `<div class="carta matriz-config"><div style="overflow-x:auto"><table><thead><tr><th></th>${colsItems.map(c=>`<th>${esc(c.nombre)}</th>`).join('')}</tr></thead><tbody>
+    ${filasItems.map(f=>`<tr><td>${esc(f.nombre)}</td>${colsItems.map(c=>{
+      const on = relacion.some(r=>r[claveFila]===f.id && r[claveCol]===c.id);
+      return `<td><input type="checkbox" data-f="${f.id}" data-c="${c.id}" ${on?'checked':''}></td>`;
+    }).join('')}</tr>`).join('')}
+  </tbody></table></div>
+  <div style="margin-top:10px"><button class="btn peq" id="cfg-guardar">Guardar matriz</button></div></div>`;
+  $('#cfg-guardar').onclick=()=>{
+    // la hoja espera (producto_id, item_id): producto = columna, item = fila
+    const filas = $$('#cfg-cuerpo input:checked').map(i=>[i.dataset.c, i.dataset.f]);
+    guardarConfig(hoja, filas, fs=>setLocal(fs));
+  };
+}
+function cfgMatrizPV(){
+  matrizChecks($('#cfg-cuerpo'), DB.Variables.slice().sort((a,b)=>(num(a.orden)||0)-(num(b.orden)||0)).map(v=>({id:v.id,nombre:v.nombre})), DB.Productos.map(p=>({id:p.id,nombre:p.nombre})),
+    DB.ProductoVariables.map(r=>({f:r.variable_id,c:r.producto_id})), 'f','c', 'ProductoVariables',
+    fs=>{ DB.ProductoVariables=fs.map(f=>({producto_id:f[0],variable_id:f[1]})); });
+}
+function cfgMatrizPM(){
+  matrizChecks($('#cfg-cuerpo'), DB.MateriasPrimas.map(m=>({id:m.id,nombre:m.nombre})), DB.Productos.map(p=>({id:p.id,nombre:p.nombre})),
+    DB.ProductoMP.map(r=>({f:r.mp_id,c:r.producto_id})), 'f','c', 'ProductoMP',
+    fs=>{ DB.ProductoMP=fs.map(f=>({producto_id:f[0],mp_id:f[1]})); });
+}
+
+/* =====================================================================
+   ARRANQUE
+===================================================================== */
+async function iniciar(){
+  try{
+    await apiGet();
+    $('#estado-conexion').textContent = DEMO ? 'MODO DEMO' : 'Conectado · ' + new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'});
+    $('#cargando').style.display='none';
+    render();
+  }catch(err){
+    $('#cargando-txt').innerHTML = 'No se pudo conectar con Google Sheets.<br><span class="mono" style="font-size:12px">'+esc(err.message)+'</span><br><br><button class="btn peq" onclick="location.reload()">Reintentar</button>';
+    document.querySelector('.girador').style.display='none';
+  }
+}
+iniciar();
+</script>
+</body>
+</html>
