@@ -837,7 +837,9 @@ function pintarTablero(){
   // opciones de gráficos disponibles
   const ops=[];
   if(vars.some(v=>['V17','V18','V19'].includes(v.id))) ops.push({id:'_flujos', nombre:'Distribución de flujos (%)'});
-  if(om) ops.push({id:'_receta', nombre:'Cumplimiento de receta'});
+  if(om) ops.push({id:'_composicion', nombre:'Variación de composición (p.p.)'});
+  if(om) ops.push({id:'_comp_pct', nombre:'Composición real vs objetivo (%)'});
+  if(om) ops.push({id:'_dosis_kg', nombre:'Real vs objetivo (kg/min)'});
   if(vars.some(v=>v.id==='V03')) ops.push({id:'_hum_mp', nombre:'Humedad materias primas'});
   ops.push({id:'_humedades', nombre:'Humedades de proceso'});
   ops.push({id:'_temps', nombre:'Temperaturas del horno'});
@@ -845,7 +847,7 @@ function pintarTablero(){
       .forEach(v=>ops.push({id:v.id, nombre:v.nombre}));
 
   const clave='graficos-'+prod.id;
-  let activos = lsGet(clave, ['_flujos', om?'_receta':'_humedades', '_humedades', '_temps'].filter((x,i,a)=>a.indexOf(x)===i));
+  let activos = lsGet(clave, ['_flujos', om?'_dosis_kg':'_humedades', om?'_composicion':'_temps', '_humedades', '_temps'].filter((x,i,a)=>a.indexOf(x)===i));
   const cont=$('#tab-selector');
   cont.innerHTML = ops.map(o=>`<label class="${activos.includes(o.id)?'on':''}"><input type="checkbox" value="${o.id}" ${activos.includes(o.id)?'checked':''}>${esc(o.nombre)}</label>`).join('');
   cont.querySelectorAll('input').forEach(i=>i.onchange=()=>{
@@ -917,25 +919,61 @@ function pintarTablero(){
         ], 'Distribución (%)');
         cfg.options.scales.y.suggestedMin=0; cfg.options.scales.y.suggestedMax=100;
       }
-      else if(id==='_receta'){
+      else if(id==='_composicion'){
+        // Proporción real resultante de cada MP (sobre el total real dosificado) menos la proporción objetivo.
+        // Resultado en puntos porcentuales: cuánto se corrió la composición del producto respecto a la receta.
         const mps=mpsReceta(prod.id).filter(m=>meds.some(x=>x.variable_id==='V16'&&x.mp_id===m.id));
         const ds = mps.map((m,i)=>{
           const datos = tss.map(t=>{
-            const x=meds.find(z=>z.timestamp===t&&z.variable_id==='V16'&&z.mp_id===m.id);
-            if(!x) return null;
-            const vig=versionVigente(prId, t); if(!vig) return null;
+            const vig=versionVigente(prId,t); if(!vig) return null;
             const props=proporcionesReceta(vig.filas);
             if(props[m.id]==null) return null;
-            // ritmo de alimentación de esa toma; si falta, usar el objetivo de la receta vigente
-            const fm=meds.find(z=>z.timestamp===t&&z.variable_id==='V15');
-            const feed = fm!=null ? num(fm.valor) : vig.alimObjetivo;
-            const obj = objetivoKgMin(props[m.id], feed);
-            if(obj==null||obj===0) return null;
-            return ((num(x.valor)||0) - obj) / obj * 100; // desviación vs objetivo
+            let totReal=0;
+            mps.forEach(mm=>{ const x=meds.find(z=>z.timestamp===t&&z.variable_id==='V16'&&z.mp_id===mm.id); if(x) totReal+=num(x.valor)||0; });
+            const xm=meds.find(z=>z.timestamp===t&&z.variable_id==='V16'&&z.mp_id===m.id);
+            if(!xm || totReal<=0) return null;
+            const propReal=(num(xm.valor)||0)/totReal*100;
+            return propReal - props[m.id]; // puntos porcentuales vs objetivo
           });
           return set(m.nombre, datos, i);
         });
-        cfg=linea(ds, 'Desviación vs objetivo (%)');
+        cfg=linea(ds, 'Variación de composición (p.p. vs objetivo)');
+      }
+      else if(id==='_comp_pct'){
+        // % real resultante de cada MP (sobre el total real) vs % objetivo de la receta.
+        const mps=mpsReceta(prod.id).filter(m=>meds.some(x=>x.variable_id==='V16'&&x.mp_id===m.id));
+        const ds=[];
+        mps.forEach((m,i)=>{
+          const real = tss.map(t=>{
+            let totReal=0;
+            mps.forEach(mm=>{ const x=meds.find(z=>z.timestamp===t&&z.variable_id==='V16'&&z.mp_id===mm.id); if(x) totReal+=num(x.valor)||0; });
+            const xm=meds.find(z=>z.timestamp===t&&z.variable_id==='V16'&&z.mp_id===m.id);
+            return (xm && totReal>0) ? (num(xm.valor)||0)/totReal*100 : null;
+          });
+          const obj = tss.map(t=>{ const vig=versionVigente(prId,t); if(!vig) return null; const props=proporcionesReceta(vig.filas); return props[m.id]!=null?props[m.id]:null; });
+          ds.push(set(m.nombre+' real', real, i));
+          ds.push(set(m.nombre+' obj.', obj, i, {borderDash:[5,4], borderWidth:1.8, pointRadius:0, pointHoverRadius:0}));
+        });
+        cfg=linea(ds, 'Composición (%)');
+      }
+      else if(id==='_dosis_kg'){
+        // Real (línea sólida) vs Objetivo (línea punteada) en kg/min, por MP.
+        // La distancia vertical entre ambas = cuánto ajustar esa materia prima.
+        const mps=mpsReceta(prod.id).filter(m=>meds.some(x=>x.variable_id==='V16'&&x.mp_id===m.id));
+        const ds=[];
+        mps.forEach((m,i)=>{
+          const real = tss.map(t=>{ const x=meds.find(z=>z.timestamp===t&&z.variable_id==='V16'&&z.mp_id===m.id); return x?num(x.valor):null; });
+          const obj = tss.map(t=>{
+            const vig=versionVigente(prId,t); if(!vig) return null;
+            const props=proporcionesReceta(vig.filas); if(props[m.id]==null) return null;
+            const fm=meds.find(z=>z.timestamp===t&&z.variable_id==='V15');
+            const feed=fm!=null?num(fm.valor):vig.alimObjetivo;
+            return objetivoKgMin(props[m.id],feed);
+          });
+          ds.push(set(m.nombre+' real', real, i));
+          ds.push(set(m.nombre+' obj.', obj, i, {borderDash:[5,4], borderWidth:1.8, pointRadius:0, pointHoverRadius:0}));
+        });
+        cfg=linea(ds, 'kg/min');
       }
       else if(id==='_hum_mp'){
         const mps=mpsDeProducto(prod.id).filter(m=>meds.some(x=>x.variable_id==='V03'&&x.mp_id===m.id));
@@ -951,7 +989,7 @@ function pintarTablero(){
         const v=varPorId(id);
         cfg=linea([set(v.nombre, serie(id), 0)], v.unidad);
       }
-      charts.push(new Chart(cv, cfg));
+      if(cfg) charts.push(new Chart(cv, cfg));
     });
   }
   dibujarGraficos();
