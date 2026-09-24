@@ -140,7 +140,7 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
       no se guarda nada) para poder probarla antes de conectarla.
 ===================================================================== */
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbyS8-H91-VJDPf_SBnyBE3NwapYgIv6AvJ7EqpdKQgR0-3-gHPv9PI8LrREiVElmK7eCw/exec'
+const API_URL = 'https://script.google.com/macros/s/AKfycbyS8-H91-VJDPf_SBnyBE3NwapYgIv6AvJ7EqpdKQgR0-3-gHPv9PI8LrREiVElmK7eCw/exec'; // ← PEGAR AQUÍ LA URL /exec DEL APPS SCRIPT
 
 const DB = { Productos:[], Variables:[], ProductoVariables:[], MateriasPrimas:[], ProductoMP:[], Producciones:[], Recetas:[], Mediciones:[], Consumos:[] };
 const DEMO = !API_URL;
@@ -830,24 +830,31 @@ function pintarTablero(){
   const prId=$('#tab-sel').value;
   const pr=DB.Producciones.find(p=>p.id===prId);
   const prod=prodPorId(pr.producto_id);
-  const vars=varsDeProducto(prod.id);
   const meds=medicionesDe(prId);
-  const om = vars.some(v=>v.id==='V16');
+  // Variables asignadas al producto + cualquier variable que tenga mediciones en esta producción
+  // (si la matriz Variables×Producto cambió después de capturar, igual se pueden graficar).
+  const idsConDatos = new Set(meds.map(m=>m.variable_id));
+  const idsAsig = new Set(varsDeProducto(prod.id).map(v=>v.id));
+  const vars = DB.Variables.filter(v=>idsAsig.has(v.id) || idsConDatos.has(v.id))
+    .sort((a,b)=>(num(a.orden)||0)-(num(b.orden)||0));
+  const tiene = id => vars.some(v=>v.id===id);
+  const om = tiene('V16');
 
   // opciones de gráficos disponibles
   const ops=[];
-  if(vars.some(v=>['V17','V18','V19'].includes(v.id))) ops.push({id:'_flujos', nombre:'Distribución de flujos (%)'});
+  if(['V17','V18','V19'].some(tiene)) ops.push({id:'_flujos', nombre:'Distribución de flujos (%)'});
   if(om) ops.push({id:'_composicion', nombre:'Variación de composición (p.p.)'});
   if(om) ops.push({id:'_comp_pct', nombre:'Composición real vs objetivo (%)'});
   if(om) ops.push({id:'_dosis_kg', nombre:'Real vs objetivo (kg/min)'});
-  if(vars.some(v=>v.id==='V03')) ops.push({id:'_hum_mp', nombre:'Humedad materias primas'});
-  ops.push({id:'_humedades', nombre:'Humedades de proceso'});
-  ops.push({id:'_temps', nombre:'Temperaturas del horno'});
-  vars.filter(v=>String(v.por_mp).toUpperCase()!=='SI' && !['V01','V02','V10','V12','V13','V17','V18','V19'].includes(v.id))
-      .forEach(v=>ops.push({id:v.id, nombre:v.nombre}));
+  if(tiene('V03')) ops.push({id:'_hum_mp', nombre:'Humedad materias primas'});
+  if(['V01','V02'].some(tiene)) ops.push({id:'_humedades', nombre:'Humedades de proceso'});
+  if(['V10','V12','V13'].some(tiene)) ops.push({id:'_temps', nombre:'Temperaturas del horno'});
+  // Gráfico individual para cada variable (las que van por MP muestran una línea por MP)
+  vars.filter(v=>!['V03','V16'].includes(v.id)).forEach(v=>ops.push({id:v.id, nombre:v.nombre}));
 
   const clave='graficos-'+prod.id;
-  let activos = lsGet(clave, ['_flujos', om?'_dosis_kg':'_humedades', om?'_composicion':'_temps', '_humedades', '_temps'].filter((x,i,a)=>a.indexOf(x)===i));
+  let activos = lsGet(clave, ['_flujos', om?'_dosis_kg':'_humedades', om?'_composicion':'_temps', '_humedades', '_temps'].filter((x,i,a)=>a.indexOf(x)===i))
+    .filter(id=>ops.some(o=>o.id===id));
   const cont=$('#tab-selector');
   cont.innerHTML = ops.map(o=>`<label class="${activos.includes(o.id)?'on':''}"><input type="checkbox" value="${o.id}" ${activos.includes(o.id)?'checked':''}>${esc(o.nombre)}</label>`).join('');
   cont.querySelectorAll('input').forEach(i=>i.onchange=()=>{
@@ -986,8 +993,13 @@ function pintarTablero(){
         cfg=linea([set('Entrada horno',serie('V13'),4), set('Salida horno',serie('V12'),1), set('Producto terminado',serie('V10'),0)], 'Temperatura (°C)');
       }
       else {
-        const v=varPorId(id);
-        cfg=linea([set(v.nombre, serie(id), 0)], v.unidad);
+        const v=varPorId(id); if(!v) return;
+        if(String(v.por_mp).toUpperCase()==='SI'){
+          const mpIds=Array.from(new Set(meds.filter(x=>x.variable_id===id && x.mp_id).map(x=>x.mp_id)));
+          cfg=linea(mpIds.map((mp,i)=>set((mpPorId(mp)||{}).nombre||mp, serie(id,mp), i)), v.unidad);
+        } else {
+          cfg=linea([set(v.nombre, serie(id), 0)], v.unidad);
+        }
       }
       if(cfg) charts.push(new Chart(cv, cfg));
     });
