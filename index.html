@@ -99,6 +99,16 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .lista-prod .item:last-child{border-bottom:none}
 .muted{color:var(--tinta2);font-size:13px}
 .mono{font-family:var(--mono)}
+.ana-tabla{overflow-x:auto}
+.ana-tabla th{cursor:pointer;user-select:none;vertical-align:bottom;min-width:62px;max-width:130px;line-height:1.25}
+.ana-tabla th.ord::after{content:' ▾';color:var(--verde)} .ana-tabla th.ord.asc::after{content:' ▴'}
+.ana-tabla td{white-space:nowrap;font-size:13px}
+.ana-tabla td.mejor{color:var(--ok);font-weight:700} .ana-tabla td.peor{color:var(--mal);font-weight:700}
+.ana-punto{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.graf .ana-ctrl{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.graf .ana-ctrl select{font-size:13px;padding:6px 8px;width:auto;flex:1;min-width:140px}
+.graf .ana-nota{font-size:12px;color:var(--tinta2);margin-top:6px}
+.graf.ancho{grid-column:1/-1}
 @media (max-width:600px){ main{padding:12px 8px 90px} .carta{padding:12px} .malla-vars{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))} }
 </style>
 </head>
@@ -115,6 +125,7 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
   <button data-v="captura">Captura 30'</button>
   <button data-v="receta">Receta</button>
   <button data-v="tablero">Tablero</button>
+  <button data-v="analisis">Análisis</button>
   <button data-v="cierre">Cierre</button>
   <button data-v="config">Config</button>
 </nav>
@@ -124,6 +135,7 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
   <section id="v-captura" hidden></section>
   <section id="v-receta" hidden></section>
   <section id="v-tablero" hidden></section>
+  <section id="v-analisis" hidden></section>
   <section id="v-cierre" hidden></section>
   <section id="v-config" hidden></section>
 </main>
@@ -260,26 +272,35 @@ function cargarDemo(){
   const t0 = Date.now() - 5*1800000;
   DB.Producciones=[
     {id:'PRprev',producto_id:'P03',fecha_inicio:new Date(t0-3*86400000).toISOString(),fecha_fin:new Date(t0-3*86400000+6*3600000).toISOString(),estado:'Cerrada',operador:'Demo',turno:'A',tm_producidas:118,costo_total:286000,costo_primo:2423.73},
+    {id:'PRprev2',producto_id:'P03',fecha_inicio:new Date(t0-5*86400000).toISOString(),fecha_fin:new Date(t0-5*86400000+5*3600000).toISOString(),estado:'Cerrada',operador:'Demo',turno:'B',tm_producidas:96,costo_total:228000,costo_primo:2375},
+    {id:'PRprev3',producto_id:'P03',fecha_inicio:new Date(t0-7*86400000).toISOString(),fecha_fin:new Date(t0-7*86400000+6.5*3600000).toISOString(),estado:'Cerrada',operador:'Demo',turno:'A',tm_producidas:104,costo_total:262000,costo_primo:2519.23},
     {id:'PRdemo',producto_id:'P03',fecha_inicio:new Date(t0).toISOString(),fecha_fin:'',estado:'En curso',operador:'Demo',turno:'A',tm_producidas:'',costo_total:'',costo_primo:''}];
   const props={MP03:25,MP04:65,MP05:10}; // % (vinaza fuera de receta)
   DB.Recetas=Object.keys(props).map((mp,i)=>({produccion_id:'PRdemo',version:1,mp_id:mp,proporcion:props[mp],timestamp:new Date(t0).toISOString(),nota:i===0?'Receta inicial':'',alim_objetivo:15}));
   DB.Mediciones=[]; DB.Consumos=[];
   const base={V01:11,V02:1.1,V04:3.2,V05:38,V06:9,V07:42,V08:65,V09:4.4,V10:104,V11:35,V12:82,V13:540,V14:60,V15:15,V17:190,V18:42,V19:18};
   const hum={MP03:2,MP04:32,MP05:9}; // vinaza NO lleva humedad (va por Brix → V05)
-  for(let i=0;i<=5;i++){
-    const ts=new Date(t0+i*1800000).toISOString();
-    const feed = base.V15*(1+(Math.random()-.5)*.06);
-    Object.keys(base).forEach(v=>{
-      const val = v==='V15' ? feed : base[v]*(1+(Math.random()-.5)*.08);
-      DB.Mediciones.push({id:uid('M'),produccion_id:'PRdemo',timestamp:ts,variable_id:v,mp_id:'',valor:+val.toFixed(2)});
-    });
-    // kg/min real ≈ objetivo (prop × feed) con ruido
-    Object.keys(props).forEach(mp=>{
-      const obj = props[mp]/100*feed*1000/60;
-      DB.Mediciones.push({id:uid('M'),produccion_id:'PRdemo',timestamp:ts,variable_id:'V16',mp_id:mp,valor:+(obj*(1+(Math.random()-.5)*.12)).toFixed(1)});
-    });
-    Object.keys(hum).forEach(mp=>DB.Mediciones.push({id:uid('M'),produccion_id:'PRdemo',timestamp:ts,variable_id:'V03',mp_id:mp,valor:+(hum[mp]*(1+(Math.random()-.5)*.1)).toFixed(1)}));
-  }
+  const genTomas = (prId, ini, n, ajuste) => {
+    for(let i=0;i<=n;i++){
+      const ts=new Date(ini+i*1800000).toISOString();
+      const feed = base.V15*(1+(Math.random()-.5)*.06);
+      Object.keys(base).forEach(v=>{
+        const val = v==='V15' ? feed : base[v]*(ajuste[v]||1)*(1+(Math.random()-.5)*.08);
+        DB.Mediciones.push({id:uid('M'),produccion_id:prId,timestamp:ts,variable_id:v,mp_id:'',valor:+val.toFixed(2)});
+      });
+      // kg/min real ≈ objetivo (prop × feed) con ruido
+      Object.keys(props).forEach(mp=>{
+        const obj = props[mp]/100*feed*1000/60;
+        DB.Mediciones.push({id:uid('M'),produccion_id:prId,timestamp:ts,variable_id:'V16',mp_id:mp,valor:+(obj*(1+(Math.random()-.5)*.12)).toFixed(1)});
+      });
+      Object.keys(hum).forEach(mp=>DB.Mediciones.push({id:uid('M'),produccion_id:prId,timestamp:ts,variable_id:'V03',mp_id:mp,valor:+(hum[mp]*(1+(Math.random()-.5)*.1)).toFixed(1)}));
+    }
+  };
+  genTomas('PRdemo', t0, 5, {});
+  // producciones anteriores del mismo producto, para la vista Análisis
+  genTomas('PRprev', t0-3*86400000, 11, {V01:1.12, V17:.9, V18:1.25});
+  genTomas('PRprev2', t0-5*86400000, 9, {V01:.92, V13:1.06, V17:1.05, V18:.8});
+  genTomas('PRprev3', t0-7*86400000, 12, {V01:1.2, V02:1.4, V17:.82, V18:1.4, V19:1.3});
 }
 
 /* ------------------------------------------------ navegación */
@@ -293,7 +314,7 @@ $('#nav').addEventListener('click', e=>{ const b=e.target.closest('button'); if(
 
 function render(){
   charts.forEach(c=>c.destroy()); charts=[];
-  ({producciones:rProducciones, captura:rCaptura, receta:rReceta, tablero:rTablero, cierre:rCierre, config:rConfig})[vistaActual]();
+  ({producciones:rProducciones, captura:rCaptura, receta:rReceta, tablero:rTablero, analisis:rAnalisis, cierre:rCierre, config:rConfig})[vistaActual]();
 }
 
 /* ------------------------------------------------ selector de producción común */
@@ -1064,6 +1085,261 @@ function mostrarDetalleToma(prId, ts){
   bg.querySelector('.dt-cerrar').onclick = cerrar;
   document.addEventListener('keydown', onEsc);
   document.body.appendChild(bg);
+}
+
+/* =====================================================================
+   VISTA: ANÁLISIS — comparar varias producciones de un mismo producto
+===================================================================== */
+const ANA_DERIV = [
+  {id:'_pt', nombre:'% Producto terminado', corto:'% PT', unidad:'%'},
+  {id:'_fi', nombre:'% Finos', corto:'% Finos', unidad:'%'},
+  {id:'_gr', nombre:'% Gruesos', corto:'% Gruesos', unidad:'%'}];
+const nomU = v => v.nombre + (v.unidad && v.nombre[0]!=='%' ? ` (${v.unidad})` : '');
+const ANA_RESUMEN = ['V01','V02','V04','V05','V10','V12','V13','V15']; // promedios en la tabla resumen
+const diaLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const fDia = iso => { const d=new Date(iso); return isNaN(d)?'—':d.toLocaleDateString('es-GT',{day:'2-digit',month:'short'}); };
+const fHrs = h => { const m=Math.round(h*60); return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')} h`; };
+let anaSel=null, anaOrden={col:'fecha', asc:false}, anaCh={};
+let anaDesde=diaLocal(new Date(Date.now()-30*86400000)), anaHasta=diaLocal(new Date());
+
+// Tomas de una producción: [{ts, h (horas desde la 1ª toma), v:{V01:…, _pt:…}}] — solo variables no por MP
+function tomasDe(prId){
+  const porTs={};
+  medicionesDe(prId).forEach(m=>{
+    if(m.mp_id) return;
+    const n=num(m.valor); if(n==null) return;
+    (porTs[m.timestamp]=porTs[m.timestamp]||{})[m.variable_id]=n;
+  });
+  const tss=Object.keys(porTs).sort((a,b)=>new Date(a)-new Date(b));
+  if(!tss.length) return [];
+  const t0=new Date(tss[0]).getTime();
+  return tss.map(ts=>{
+    const v=porTs[ts], tot=(v.V17||0)+(v.V18||0)+(v.V19||0);
+    if(tot>0){ v._pt=(v.V17||0)/tot*100; v._fi=(v.V18||0)/tot*100; v._gr=(v.V19||0)/tot*100; }
+    return {ts, h:(new Date(ts).getTime()-t0)/3600000, v};
+  });
+}
+function estad(arr){
+  const a=arr.filter(x=>x!=null); if(!a.length) return null;
+  const prom=a.reduce((s,x)=>s+x,0)/a.length;
+  return {n:a.length, prom, min:Math.min(...a), max:Math.max(...a), de:Math.sqrt(a.reduce((s,x)=>s+(x-prom)**2,0)/a.length)};
+}
+function pearson(pts){
+  if(pts.length<3) return null;
+  const mx=pts.reduce((s,p)=>s+p.x,0)/pts.length, my=pts.reduce((s,p)=>s+p.y,0)/pts.length;
+  let sxy=0,sxx=0,syy=0; pts.forEach(p=>{ sxy+=(p.x-mx)*(p.y-my); sxx+=(p.x-mx)**2; syy+=(p.y-my)**2; });
+  return (sxx>0&&syy>0) ? sxy/Math.sqrt(sxx*syy) : null;
+}
+function descargarCSV(nombre, filas){
+  // separador ; y coma decimal: abre directo en Excel en español
+  const celda = c => {
+    const s = c==null ? '' : typeof c==='number' ? String(Math.round(c*1000)/1000).replace('.',',') : String(c);
+    return /[;"\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  };
+  const csv='﻿'+filas.map(f=>f.map(celda).join(';')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=nombre; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+function rAnalisis(){
+  const s=$('#v-analisis');
+  const prods=DB.Productos.filter(p=>DB.Producciones.some(pr=>pr.producto_id===p.id));
+  if(!prods.length){ s.innerHTML='<h2>Análisis</h2><div class="aviso info">Todavía no hay producciones registradas.</div>'; return; }
+  let pid=lsGet('ana-prod', null); if(!prods.some(p=>p.id===pid)) pid=prods[0].id;
+
+  s.innerHTML=`<h2>Análisis</h2>
+    <div class="carta"><div class="fila">
+      <div class="campo"><label>Producto</label><select id="ana-prod">${prods.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+      <div class="campo" style="max-width:170px"><label>Desde</label><input type="date" id="ana-desde" value="${anaDesde}"></div>
+      <div class="campo" style="max-width:170px"><label>Hasta</label><input type="date" id="ana-hasta" value="${anaHasta}"></div>
+    </div>
+    <div class="campo" style="margin-top:12px"><label>Producciones a comparar</label></div>
+    <div id="ana-lista" class="selector-graficos"></div></div>
+    <div id="ana-cuerpo"></div>`;
+  $('#ana-prod').onchange=()=>{ lsSet('ana-prod',$('#ana-prod').value); anaSel=null; rAnalisis(); };
+  $('#ana-desde').onchange=()=>{ anaDesde=$('#ana-desde').value; anaSel=null; rAnalisis(); };
+  $('#ana-hasta').onchange=()=>{ anaHasta=$('#ana-hasta').value; anaSel=null; rAnalisis(); };
+
+  // producciones del producto dentro del rango (por fecha de inicio), en orden cronológico
+  const filas=DB.Producciones
+    .filter(p=>p.producto_id===pid && (!anaDesde || diaLocal(new Date(p.fecha_inicio))>=anaDesde) && (!anaHasta || diaLocal(new Date(p.fecha_inicio))<=anaHasta))
+    .sort((a,b)=>new Date(a.fecha_inicio)-new Date(b.fecha_inicio))
+    .map((pr,i)=>({pr, tomas:tomasDe(pr.id), color:PALETA[i%PALETA.length], etq:fDia(pr.fecha_inicio)+(pr.turno?' · turno '+pr.turno:'')}))
+    .filter(r=>r.tomas.length);
+  if(!filas.length){ $('#ana-lista').innerHTML='<div class="muted">No hay producciones con tomas en este rango de fechas.</div>'; return; }
+  if(!anaSel) anaSel=new Set(filas.slice(-8).map(r=>r.pr.id)); // por defecto: las 8 más recientes
+
+  const lista=$('#ana-lista');
+  lista.innerHTML=filas.map(r=>{ const on=anaSel.has(r.pr.id);
+    return `<label class="${on?'on':''}"><input type="checkbox" value="${r.pr.id}" ${on?'checked':''}><span class="ana-punto" style="background:${r.color}"></span>${esc(r.etq)} <span class="muted">(${r.tomas.length})</span></label>`; }).join('')
+    + (filas.length>1 ? `<button class="btn sec peq" id="ana-todas">${filas.every(r=>anaSel.has(r.pr.id))?'Ninguna':'Todas'}</button>` : '');
+  lista.querySelectorAll('input').forEach(i=>i.onchange=()=>{ i.checked?anaSel.add(i.value):anaSel.delete(i.value); rAnalisis(); });
+  const bt=$('#ana-todas'); if(bt) bt.onclick=()=>{ anaSel = filas.every(r=>anaSel.has(r.pr.id)) ? new Set() : new Set(filas.map(r=>r.pr.id)); rAnalisis(); };
+
+  pintarAnalisis(filas.filter(r=>anaSel.has(r.pr.id)), prodPorId(pid));
+}
+
+function pintarAnalisis(sel, prod){
+  const cuerpo=$('#ana-cuerpo');
+  charts.forEach(c=>c.destroy()); charts=[]; anaCh={};
+  if(!sel.length){ cuerpo.innerHTML='<div class="aviso info">Marcá arriba al menos una producción.</div>'; return; }
+
+  // variables disponibles en las producciones elegidas
+  const presentes=new Set(); sel.forEach(r=>r.tomas.forEach(t=>Object.keys(t.v).forEach(k=>presentes.add(k))));
+  const vars=ANA_DERIV.filter(d=>presentes.has(d.id)).concat(
+    DB.Variables.filter(v=>String(v.por_mp).toUpperCase()!=='SI' && presentes.has(v.id))
+      .sort((a,b)=>(num(a.orden)||0)-(num(b.orden)||0)).map(v=>({id:v.id, nombre:v.nombre, unidad:v.unidad})));
+  const infoVar=id=>vars.find(v=>v.id===id)||{id, nombre:id, unidad:''};
+  sel.forEach(r=>{ r.st={}; vars.forEach(v=>r.st[v.id]=estad(r.tomas.map(t=>t.v[v.id]))); });
+
+  // ---------- tabla resumen ----------
+  const promCol=v=>({k:v.id, t:v.corto||nomU(v), num:true,
+    v:r=>r.st[v.id]?r.st[v.id].prom:null, f:r=>r.st[v.id]?f1(r.st[v.id].prom):'—',
+    tip:r=>r.st[v.id]?`mín ${f1(r.st[v.id].min)} · máx ${f1(r.st[v.id].max)} · desv. ${f2(r.st[v.id].de)}`:''});
+  const tm=r=>num(r.pr.tm_producidas), qtm=r=>num(r.pr.costo_primo);
+  const cols=[
+    {k:'fecha', t:'Fecha', v:r=>new Date(r.pr.fecha_inicio).getTime(), f:r=>`<span class="ana-punto" style="background:${r.color};margin-right:6px"></span>${fFecha(r.pr.fecha_inicio)}`, csv:r=>fFecha(r.pr.fecha_inicio)},
+    {k:'turno', t:'Turno', v:r=>r.pr.turno||'', f:r=>esc(r.pr.turno||'—')},
+    {k:'op', t:'Operador', v:r=>r.pr.operador||'', f:r=>esc(r.pr.operador||'—')},
+    {k:'tomas', t:'Tomas', num:true, v:r=>r.tomas.length, f:r=>r.tomas.length},
+    {k:'dur', t:'Duración (h)', num:true, v:r=>r.tomas[r.tomas.length-1].h, f:r=>f1(r.tomas[r.tomas.length-1].h)}
+  ].concat(ANA_DERIV.filter(d=>presentes.has(d.id)).map(promCol))
+   .concat(ANA_RESUMEN.filter(id=>presentes.has(id)).map(id=>promCol(infoVar(id))))
+   .concat([
+    {k:'tm', t:'TM producidas', num:true, v:tm, f:r=>tm(r)!=null?f1(tm(r)):'—'},
+    {k:'qtm', t:'Costo primo (Q/TM)', num:true, v:qtm, f:r=>qtm(r)!=null?fQ(qtm(r)):'—'}]);
+  // mejor / peor de cada columna cuando hay al menos 3 producciones (más alto = mejor salvo finos, gruesos y costo)
+  const sentido={_pt:1, _fi:-1, _gr:-1, tm:1, qtm:-1};
+  const marca=(c,r)=>{
+    if(!(c.k in sentido) || sel.length<3) return '';
+    const vals=sel.map(c.v).filter(x=>x!=null); if(vals.length<3) return '';
+    const x=c.v(r); if(x==null) return '';
+    const best=sentido[c.k]>0?Math.max(...vals):Math.min(...vals), worst=sentido[c.k]>0?Math.min(...vals):Math.max(...vals);
+    return x===best?'mejor':x===worst?'peor':'';
+  };
+  const ordC=cols.find(c=>c.k===anaOrden.col)||cols[0];
+  const orden=sel.slice().sort((a,b)=>{ const x=ordC.v(a), y=ordC.v(b);
+    if(x==null) return 1; if(y==null) return -1;
+    return (x<y?-1:x>y?1:0)*(anaOrden.asc?1:-1); });
+
+  const nVars=vars.length;
+  cuerpo.innerHTML=`
+    <div class="carta"><h3 style="margin-top:0">Resumen por producción</h3>
+      <div class="ana-tabla"><table><thead><tr>${cols.map(c=>`<th class="${c.num?'num':''} ${c.k===ordC.k?'ord'+(anaOrden.asc?' asc':''):''}" data-k="${c.k}">${esc(c.t)}</th>`).join('')}</tr></thead>
+      <tbody>${orden.map(r=>`<tr>${cols.map(c=>`<td class="${c.num?'num':''} ${marca(c,r)}" ${c.tip&&c.tip(r)?`title="${esc(c.tip(r))}"`:''}>${c.f(r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <p class="muted" style="margin-top:8px">Valores = promedio de las tomas. Pasá el cursor sobre un valor para ver mín, máx y desviación. Clic en un encabezado para ordenar.${sel.length>=3?' Verde = mejor, rojo = peor.':''}</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn sec peq" id="ana-csv-res">⬇ Exportar resumen (CSV)</button>
+        <button class="btn sec peq" id="ana-csv-tomas">⬇ Exportar todas las tomas (CSV)</button>
+      </div>
+    </div>
+    ${nVars ? `<div class="grid-graficos">
+      <div class="graf ancho"><h4>Días superpuestos</h4>
+        <div class="ana-ctrl"><select id="ana-v-sup">${vars.map(v=>`<option value="${v.id}">${esc(v.nombre)}</option>`).join('')}</select></div>
+        <div class="lienzo" style="height:280px"><canvas id="ana-g-sup"></canvas></div>
+        <div class="ana-nota">Eje horizontal = horas desde la primera toma de cada producción. Clic en un punto para ver la toma completa.</div></div>
+      <div class="graf"><h4>Tendencia entre días</h4>
+        <div class="ana-ctrl"><select id="ana-v-ten">${vars.map(v=>`<option value="${v.id}">${esc(v.nombre)}</option>`).join('')}</select></div>
+        <div class="lienzo" style="height:260px"><canvas id="ana-g-ten"></canvas></div>
+        <div class="ana-nota">Punto = promedio del día · barra = rango mínimo–máximo.</div></div>
+      <div class="graf"><h4>Relación entre variables <span class="muted mono" id="ana-r"></span></h4>
+        <div class="ana-ctrl">
+          <select id="ana-v-x" title="Eje X">${vars.map(v=>`<option value="${v.id}">X: ${esc(v.nombre)}</option>`).join('')}</select>
+          <select id="ana-v-y" title="Eje Y">${vars.map(v=>`<option value="${v.id}">Y: ${esc(v.nombre)}</option>`).join('')}</select></div>
+        <div class="lienzo" style="height:260px"><canvas id="ana-g-xy"></canvas></div>
+        <div class="ana-nota">Cada punto es una toma. r cerca de +1 o −1 = relación fuerte; cerca de 0 = sin relación.</div></div>
+    </div>` : ''}`;
+
+  cuerpo.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k; anaOrden = anaOrden.col===k ? {col:k, asc:!anaOrden.asc} : {col:k, asc:k==='fecha'?false:true};
+    pintarAnalisis(sel, prod);
+  });
+  $('#ana-csv-res').onclick=()=>descargarCSV(`resumen_${prod.nombre}_${diaLocal(new Date())}.csv`,
+    [cols.map(c=>c.t)].concat(orden.map(r=>cols.map(c=>c.csv?c.csv(r):c.v(r)))));
+  $('#ana-csv-tomas').onclick=()=>{
+    const enc=['Producción','Inicio producción','Turno','Operador','Fecha toma','Hora toma','Horas desde 1ª toma'].concat(vars.map(nomU));
+    const out=[enc];
+    sel.forEach(r=>r.tomas.forEach(t=>out.push([r.pr.id, fFecha(r.pr.fecha_inicio), r.pr.turno||'', r.pr.operador||'',
+      new Date(t.ts).toLocaleDateString('es-GT'), fHora(t.ts), t.h].concat(vars.map(v=>t.v[v.id]!=null?t.v[v.id]:null)))));
+    descargarCSV(`tomas_${prod.nombre}_${diaLocal(new Date())}.csv`, out);
+  };
+  if(!nVars) return;
+
+  // ---------- estilo común de gráficos ----------
+  const FAM="'Archivo', system-ui, sans-serif", TINTA='#22302B', TINTA2='#64716A', GRID='rgba(34,48,43,.07)', LINEA='#E0DED4';
+  const fmt=y=>y==null?'—':y.toLocaleString('es-GT',{maximumFractionDigits:2});
+  const eje=(titulo, extra)=>Object.assign({ grid:{color:GRID, drawTicks:false}, border:{display:false},
+    ticks:{color:TINTA2, font:{family:FAM, size:10.5}, padding:6},
+    title:{display:!!titulo, text:titulo, color:TINTA2, font:{family:FAM, size:11, weight:'600'}} }, extra||{});
+  const opciones=(extra)=>Object.assign({ responsive:true, maintainAspectRatio:false,
+    layout:{padding:{top:4,right:8}},
+    plugins:{
+      legend:{position:'top', align:'start', labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, boxHeight:8, padding:12, color:TINTA2, font:{family:FAM, size:11.5, weight:'600'}}},
+      tooltip:{backgroundColor:'#fff', titleColor:TINTA, bodyColor:TINTA, borderColor:LINEA, borderWidth:1, padding:10, cornerRadius:8,
+        titleFont:{family:FAM, size:12, weight:'700'}, bodyFont:{family:FAM, size:12}, boxPadding:5, usePointStyle:true}
+    }}, extra||{});
+  const tituloEje=id=>nomU(infoVar(id));
+  // clic en un punto → detalle de la toma (los puntos llevan pr y ts)
+  const alClic=(evt,els,chart)=>{ if(!els.length) return; const p=chart.data.datasets[els[0].datasetIndex].data[els[0].index]; if(p&&p.ts) mostrarDetalleToma(p.pr, p.ts); };
+  const grafico=(clave, idCanvas, cfg)=>{
+    if(anaCh[clave]){ anaCh[clave].destroy(); charts=charts.filter(c=>c!==anaCh[clave]); }
+    anaCh[clave]=new Chart(document.getElementById(idCanvas), cfg); charts.push(anaCh[clave]);
+  };
+  const elegir=(idSel, clave, def)=>{ const s=$('#'+idSel); const g=lsGet(clave,null);
+    s.value = vars.some(v=>v.id===g) ? g : (def.find(d=>vars.some(v=>v.id===d)) || vars[0].id); return s; };
+
+  // ---------- días superpuestos ----------
+  const dibSup=()=>{
+    const id=$('#ana-v-sup').value;
+    grafico('sup','ana-g-sup',{ type:'line',
+      data:{datasets:sel.map(r=>({label:r.etq, borderColor:r.color, backgroundColor:r.color, pointBackgroundColor:'#fff', pointBorderColor:r.color,
+        borderWidth:2.2, tension:.3, pointRadius:2.5, pointHoverRadius:5, pointHitRadius:10, spanGaps:true,
+        data:r.tomas.filter(t=>t.v[id]!=null).map(t=>({x:t.h, y:t.v[id], ts:t.ts, pr:r.pr.id}))}))},
+      options:opciones({ onClick:alClic, interaction:{mode:'nearest', intersect:false},
+        scales:{ x:eje('Horas desde la primera toma',{type:'linear', min:0, grid:{display:false}, ticks:{color:TINTA2, font:{family:FAM,size:10.5}, callback:v=>fHrs(v)}}), y:eje(tituloEje(id)) },
+        plugins:Object.assign(opciones().plugins,{tooltip:Object.assign(opciones().plugins.tooltip,{callbacks:{
+          title:it=>it.length?'+'+fHrs(it[0].parsed.x)+' · '+fHora(it[0].raw.ts):'', label:c=>` ${c.dataset.label}: ${fmt(c.parsed.y)}`}})}) })
+    });
+  };
+  // ---------- tendencia entre días ----------
+  const dibTen=()=>{
+    const id=$('#ana-v-ten').value, st=sel.map(r=>r.st[id]);
+    grafico('ten','ana-g-ten',{ type:'bar',
+      data:{labels:sel.map(r=>r.etq), datasets:[
+        {type:'line', label:'Promedio', data:st.map(x=>x?x.prom:null), borderColor:TINTA2, borderWidth:1.5, tension:0, spanGaps:true,
+          pointRadius:5, pointHoverRadius:7, pointBackgroundColor:sel.map(r=>r.color), pointBorderColor:'#fff', pointBorderWidth:2, order:1},
+        {type:'bar', label:'Rango mín–máx', data:st.map(x=>x?[x.min,x.max]:null), backgroundColor:sel.map(r=>r.color+'33'), borderColor:sel.map(r=>r.color),
+          borderWidth:1, borderSkipped:false, borderRadius:4, barPercentage:.45, order:2}]},
+      options:opciones({ interaction:{mode:'index', intersect:false},
+        scales:{ x:eje('',{grid:{display:false}}), y:eje(tituloEje(id),{beginAtZero:false}) },
+        plugins:Object.assign(opciones().plugins,{tooltip:Object.assign(opciones().plugins.tooltip,{callbacks:{
+          label:c=>{ if(Array.isArray(c.raw)) return ` Rango: ${fmt(c.raw[0])} – ${fmt(c.raw[1])}`;
+            const x=st[c.dataIndex]; return ` Promedio: ${fmt(c.parsed.y)}`+(x?` (desv. ${fmt(x.de)}, ${x.n} tomas)`:''); }}})}) })
+    });
+  };
+  // ---------- relación X vs Y ----------
+  const dibXY=()=>{
+    const ix=$('#ana-v-x').value, iy=$('#ana-v-y').value, todos=[];
+    const ds=sel.map(r=>{ const data=r.tomas.filter(t=>t.v[ix]!=null&&t.v[iy]!=null).map(t=>({x:t.v[ix], y:t.v[iy], ts:t.ts, pr:r.pr.id}));
+      todos.push(...data);
+      return {label:r.etq, data, backgroundColor:r.color+'CC', borderColor:r.color, pointRadius:4, pointHoverRadius:6}; });
+    const rr=ix!==iy?pearson(todos):null;
+    $('#ana-r').textContent = rr!=null ? `· r = ${rr.toLocaleString('es-GT',{maximumFractionDigits:2})} (${todos.length} tomas)` : '';
+    grafico('xy','ana-g-xy',{ type:'scatter', data:{datasets:ds},
+      options:opciones({ onClick:alClic, interaction:{mode:'nearest', intersect:true},
+        scales:{ x:eje(tituloEje(ix),{grid:{color:GRID}}), y:eje(tituloEje(iy)) },
+        plugins:Object.assign(opciones().plugins,{tooltip:Object.assign(opciones().plugins.tooltip,{callbacks:{
+          label:c=>` ${c.dataset.label} ${fHora(c.raw.ts)} · X ${fmt(c.parsed.x)} · Y ${fmt(c.parsed.y)}`}})}) })
+    });
+  };
+
+  elegir('ana-v-sup','ana-v-sup',['_pt','V01']).onchange=e=>{ lsSet('ana-v-sup',e.target.value); dibSup(); };
+  elegir('ana-v-ten','ana-v-ten',['V02','V01']).onchange=e=>{ lsSet('ana-v-ten',e.target.value); dibTen(); };
+  elegir('ana-v-x','ana-v-x',['V01']).onchange=e=>{ lsSet('ana-v-x',e.target.value); dibXY(); };
+  elegir('ana-v-y','ana-v-y',['_pt','V02']).onchange=e=>{ lsSet('ana-v-y',e.target.value); dibXY(); };
+  dibSup(); dibTen(); dibXY();
 }
 
 /* =====================================================================
