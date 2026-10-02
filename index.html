@@ -454,6 +454,7 @@ function rCaptura(){
   const sel = selectorProduccion('cap-sel', true, lsGet('cap-prod',null));
   if(!sel){ s.innerHTML='<h2>Captura 30\'</h2><div class="aviso info">No hay producciones en curso. Iniciá una desde la pestaña Producciones.</div>'; return; }
   s.innerHTML = `<h2>Captura 30'</h2><div class="carta"><div class="fila">${sel}
+    <div class="campo" style="max-width:170px"><label>Fecha de la toma</label><input type="date" id="cap-fecha" value="${diaLocal(new Date())}"></div>
     <div class="campo" style="max-width:160px"><label>Hora de la toma</label><input type="time" id="cap-hora" value="${new Date().toTimeString().slice(0,5)}"></div>
   </div></div><div id="cap-form"></div>`;
   $('#cap-sel').onchange = ()=>{ lsSet('cap-prod', $('#cap-sel').value); pintarFormCaptura(); };
@@ -597,8 +598,15 @@ function pintarFormCaptura(){
   $('#cap-guardar').onclick = async ()=>{
     const btn=$('#cap-guardar'); btn.disabled=true;
     try{
-      const hora = $('#cap-hora').value;
-      const d = new Date(); if(hora){ const [h,m]=hora.split(':'); d.setHours(+h,+m,0,0); }
+      const hora = $('#cap-hora').value, fecha = $('#cap-fecha').value;
+      const d = new Date();
+      if(fecha){ const [a,me,di]=fecha.split('-'); d.setFullYear(+a,+me-1,+di); }
+      if(hora){ const [h,m]=hora.split(':'); d.setHours(+h,+m,0,0); }
+      // validaciones: toma en el futuro, o muy lejos del inicio de la producción (fecha equivocada / producción equivocada)
+      const horasDesdeInicio = (d - new Date(pr.fecha_inicio))/3600000;
+      if(d - Date.now() > 10*60000 && !confirm(`La toma (${fFecha(d.toISOString())}) es una hora que todavía no pasó.\n¿Guardar de todos modos?`)){ btn.disabled=false; return; }
+      if(horasDesdeInicio < -1 && !confirm(`La toma es ANTERIOR al inicio de esta producción (${fFecha(pr.fecha_inicio)}).\nRevisá la fecha o la producción seleccionada. ¿Guardar de todos modos?`)){ btn.disabled=false; return; }
+      if(horasDesdeInicio > 16 && !confirm(`Esta producción (${prod.nombre}) empezó el ${fFecha(pr.fecha_inicio)}, hace ${Math.round(horasDesdeInicio)} h respecto a esta toma.\nSi la toma es de otro día, revisá la fecha o elegí la producción correcta. ¿Guardar de todos modos?`)){ btn.disabled=false; return; }
       const ts = d.toISOString();
       const filas=[];
       // offsetParent===null → el campo está oculto (parámetro no medido en esta toma): se omite
